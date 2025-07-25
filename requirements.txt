@@ -1,0 +1,4 @@
+pymysql
+numpy
+requests
+pytz
