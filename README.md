@@ -14,11 +14,26 @@ The TMDb Crawler is designed to maintain an up-to-date local database of enterta
 ## Setup
 
 ### Database Setup
-Before running the TMDb Crawler, you need to create the required database tables:
+Before running the TMDb Crawler, you need to create the required database tables and server variables:
 
 1. **Create TMDb Tables**: Execute the `TMDb-tables.sql` script in your MariaDB/MySQL database to create all necessary tables and indexes.
    ```sql
    mysql -u your_username -p your_database < TMDb-tables.sql
+   ```
+
+2. **Create Server Variables Table**: Execute the `T_WC_SERVER_VARIABLE.sql` script to set up the server variables table for tracking processing state.
+   ```sql
+   mysql -u your_username -p your_database < T_WC_SERVER_VARIABLE.sql
+   ```
+
+3. **Create Wikidata Tables**: Execute the `Wikidata-tables.sql` script to create tables for Wikidata integration.
+   ```sql
+   mysql -u your_username -p your_database < Wikidata-tables.sql
+   ```
+
+4. **Create Wikipedia Tables**: Execute the `Wikipedia-tables.sql` script to create tables for Wikipedia data integration.
+   ```sql
+   mysql -u your_username -p your_database < Wikipedia-tables.sql
    ```
 
 ### Configuration
@@ -180,6 +195,8 @@ tmdb-crawler/
 ├── requirements.txt                   # Python dependencies specification
 ├── TMDb-tables.sql                    # Database schema creation script
 ├── T_WC_SERVER_VARIABLE.sql           # Server variables table setup script
+├── Wikidata-tables.sql                # Wikidata integration tables creation script
+├── Wikipedia-tables.sql               # Wikipedia data tables creation script
 ├── .gitignore                         # Git ignore rules for sensitive files
 └── README.md                          # This documentation
 ```
@@ -191,6 +208,8 @@ tmdb-crawler/
 - **`citizenphilsecrets.py`** - Configuration file containing database credentials and API keys (excluded from version control)
 - **`TMDb-tables.sql`** - SQL script to create all required database tables and indexes for the TMDb data
 - **`T_WC_SERVER_VARIABLE.sql`** - SQL script to set up server variables table for tracking processing state
+- **`Wikidata-tables.sql`** - SQL script to create database tables for Wikidata integration and cross-referencing
+- **`Wikipedia-tables.sql`** - SQL script to create database tables for Wikipedia data integration
 - **`tmdb-crawler.sh`** - Shell script for easy Docker container management and deployment
 
 ## Notes
