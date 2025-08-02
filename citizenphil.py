@@ -13,6 +13,7 @@ global cursor
 
 # Database connectioncp parameters
 global strdbhost
+global lngdbport
 global strdbuser
 global strdbpassword
 global strdbname
@@ -37,14 +38,45 @@ headers = {
     "Authorization": "Bearer " + strtmdbapitoken
 }
 
-# Connect to the database
 connectioncp = pymysql.connect(host=strdbhost, port=lngdbport, user=strdbuser, password=strdbpassword, database=strdbname, cursorclass=pymysql.cursors.DictCursor)
 
 paris_tz = pytz.timezone(cps.strusertimezone)
 
 strdatepattern = r"^\d{4}-\d{2}-\d{2}$"
 
-def f_sqlupdatearray(strsqltablename,arrpersoncouples,strsqlupdatecondition,intaddstdfields):
+def f_sqlupdatearray(strsqltablename, arrpersoncouples, strsqlupdatecondition, intaddstdfields):
+    """
+    Insert or update a record in a SQL table based on whether it already exists.
+    
+    Parameters:
+    -----------
+    strsqltablename : str
+        The name of the SQL table to insert/update records in
+    arrpersoncouples : dict
+        Dictionary containing column names as keys and their corresponding values
+        to be inserted or updated in the database table
+    strsqlupdatecondition : str
+        SQL WHERE condition string used to check if record exists and for updates
+        (e.g., "id = 123" or "name = 'John' AND age = 30")
+    intaddstdfields : int
+        Flag to determine if standard fields should be automatically added:
+        - 1: Add standard fields (TIM_UPDATED, DELETED, DAT_CREAT, ID_CREATOR, ID_OWNER, ID_USER_UPDATED)
+        - 0: Do not add standard fields
+    
+    Returns:
+    --------
+    int or None
+        - If inserting a new record: returns the auto-generated ID (lastrowid) of the inserted record
+        - If updating an existing record: returns None (no explicit return value)
+    
+    Behavior:
+    ---------
+    - Checks if a record exists using the provided condition
+    - If record doesn't exist: performs INSERT with optional standard fields
+    - If record exists: performs UPDATE with proper value escaping for strings
+    - Handles different data types (int, float, None/NULL, strings) appropriately
+    - Commits transaction on success, rolls back on MySQL errors
+    """
     global connectioncp
     global paris_tz
     
@@ -54,7 +86,6 @@ def f_sqlupdatearray(strsqltablename,arrpersoncouples,strsqlupdatecondition,inta
             arrpersoncouples["TIM_UPDATED"] = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
     strsqlexists = f"SELECT * FROM {strsqltablename} WHERE {strsqlupdatecondition}"
     # print(strsqlexists)
-    # Executing the query
     cursor2.execute(strsqlexists)
     lngrowcount = cursor2.rowcount
     if lngrowcount == 0:
@@ -77,10 +108,8 @@ def f_sqlupdatearray(strsqltablename,arrpersoncouples,strsqlupdatecondition,inta
         strsqlinsertplaceholders = ', '.join(['%s'] * len(arrpersoncouples))
         strsqlinsert = f"INSERT INTO {strsqltablename} ({strsqlinsertcolumns}) VALUES ({strsqlinsertplaceholders})"
         # print(strsqlinsert)
-        # Execute the SQL command
         cursor2.execute(strsqlinsert, list(arrpersoncouples.values()))
         lngnewid = cursor2.lastrowid
-        # Commit the changes to the database
         connectioncp.commit()
         return lngnewid
     else:
@@ -111,11 +140,9 @@ def f_sqlupdatearray(strsqltablename,arrpersoncouples,strsqlupdatecondition,inta
         # format SQL string
         strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
         # print(strsqlupdate)
-        # Call Query
         try:
             cursor2.execute(strsqlupdate)
             # print("UPDATE")
-            # Commit the changes to the database
             connectioncp.commit()
         except pymysql.MySQLError as e:
             print(f"❌ MySQL Error: {e}")
@@ -141,14 +168,159 @@ def f_tmdbjsonremovekeys(strjson,strbegin,strend,strreplace):
                 strjson = strjson[0:lngposbegin] + strreplace + strjson[lngposend + lnglenend:]
     return strjson
 
+def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, strsqltablename, strkeyfieldname):
+    """
+    Fetch images for a content from TMDb API and store them in the T_WC_TMDB_*_IMAGE table.
+    
+    Args:
+        lngcontentid (int): TMDb ID of the content
+        
+    Returns:
+        bool: True if successful, False if failed
+    """
+    global strtmdbapidomainurl
+    global headers
+    global connectioncp
+    global strsqlns
+    global paris_tz
+    
+    if lngcontentid <= 0:
+        print(f"Error: Invalid {strcontenttype} ID {lngcontentid}")
+        return False
+    
+    strtmdbapiimagesurl = f"3/{strcontenttype}/{lngcontentid}/images"
+    strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiimagesurl
+    
+    # Add retry logic with error handling
+    intencore = True
+    intattemptsremaining = 5
+    intsuccess = False
+    
+    while intencore:
+        try:
+            response = requests.get(strtmdbapifullurl, headers=headers)
+            intencore = False
+            intsuccess = True
+        except requests.exceptions.HTTPError as http_err:
+            print(f'HTTP error occurred: {http_err}')
+        except requests.exceptions.ConnectionError as conn_err:
+            print(f'Connection error occurred: {conn_err}')
+        except requests.exceptions.Timeout as timeout_err:
+            print(f'Timeout error occurred: {timeout_err}')
+        except requests.exceptions.RequestException as req_err:
+            print(f'Request error occurred: {req_err}')
+        except Exception as err:
+            print(f'An error occurred: {err}')
+        
+        if intencore:
+            intattemptsremaining = intattemptsremaining - 1
+            if intattemptsremaining >= 0:
+                time.sleep(1)  # Wait for 1 second before next request
+            else:
+                intencore = False
+    
+    if not intsuccess:
+        print(f"f_tmdbcontentimagesstosql({lngcontentid}) failed!")
+        return False
+    
+    data = response.json()
+    if 'status_code' in data and data['status_code'] > 1:
+        print(f"Error: API returned status code {data['status_code']}")
+        if 'status_message' in data:
+            print(f"Status message: {data['status_message']}")
+        return False
+    
+    # Get current timestamp for database records
+    current_time = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+    current_date = datetime.now(paris_tz).strftime("%Y-%m-%d")
+    
+    # Track all image paths to clean up obsolete ones later
+    all_image_paths = []
+    
+    # Function to process image arrays (both backdrops and posters)
+    def process_image_array(image_array, image_type):
+        lngdisplayorder = 0
+        for image in image_array:
+            lngdisplayorder += 1
+            
+            # Extract image data
+            image_path = image.get('file_path', '')
+            if not image_path:
+                continue
+                
+            all_image_paths.append(image_path)
+            
+            # Prepare data for database
+            arrimagedata = {
+                strkeyfieldname: lngcontentid,
+                "DISPLAY_ORDER": lngdisplayorder,
+                "DAT_CREAT": current_date,
+                "TIM_UPDATED": current_time,
+                "TYPE_IMAGE": image_type,
+                "LANG": image.get('iso_639_1', ''),
+                "IMAGE_PATH": image_path,
+                "ASPECT_RATIO": image.get('aspect_ratio', 0),
+                "WIDTH": image.get('width', 0),
+                "HEIGHT": image.get('height', 0),
+                "VOTE_AVERAGE": image.get('vote_average', 0),
+                "VOTE_COUNT": image.get('vote_count', 0)
+            }
+            
+            # Update or insert into database
+            strsqlupdatecondition = f"{strkeyfieldname} = {lngcontentid} AND TYPE_IMAGE = '{image_type}' AND IMAGE_PATH = '{image_path}'"
+            f_sqlupdatearray(strsqltablename, arrimagedata, strsqlupdatecondition, 1)
+    
+    # Process backdrops
+    if 'backdrops' in data and data['backdrops']:
+        process_image_array(data['backdrops'], 'backdrop')
+    
+    # Process posters
+    if 'posters' in data and data['posters']:
+        process_image_array(data['posters'], 'poster')
+    
+    # Process logos
+    if 'logos' in data and data['logos']:
+        process_image_array(data['logos'], 'logo')
+    
+    # Process profiles
+    if 'profiles' in data and data['profiles']:
+        process_image_array(data['profiles'], 'profile')
+    
+    # Clean up obsolete images
+    if all_image_paths:
+        # Create a comma-separated list of image paths with quotes
+        image_paths_list = "'" + "', '".join(all_image_paths) + "'"
+        
+        # Delete images that are no longer present in the API response
+        strsqldelete = f"DELETE FROM {strsqltablename} WHERE {strkeyfieldname} = {lngcontentid} AND IMAGE_PATH NOT IN ({image_paths_list})"
+        cursor = connectioncp.cursor()
+        cursor.execute(strsqldelete)
+        connectioncp.commit()
+    else:
+        # If no images were found, delete all images for this contents
+        strsqldelete = f"DELETE FROM {strsqltablename} WHERE {strkeyfieldname} = {lngcontentid}"
+        cursor = connectioncp.cursor()
+        cursor.execute(strsqldelete)
+        connectioncp.commit()
+    
+    # Update the content record to mark images as completed
+    strtimimagescompleted = current_time
+    strsqlupdatecondition = f"{strkeyfieldname} = {lngcontentid}"
+    strsqlupdatesetclause = f"TIM_IMAGES_COMPLETED = '{strtimimagescompleted}'"
+    strsqlupdate = f"UPDATE {strsqlmastertable} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
+    cursor = connectioncp.cursor()
+    cursor.execute(strsqlupdate)
+    connectioncp.commit()
+    return True
+    
+# https://developer.themoviedb.org/reference/person-details
+
 def f_tmdbpersontosql(lngpersonid):
     global strtmdbapidomainurl
     global headers
     global strdatepattern
     
     if lngpersonid > 0:
-        # strtmdbapipersonurl = "3/person/" + str(lngpersonid)
-        # New TMDb API call with append_to_response since 2024-05-25 10:00
         strtmdbapipersonurl = "3/person/" + str(lngpersonid) + "?append_to_response=combined_credits,external_ids"
         strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapipersonurl
         # print(strtmdbapifullurl)
@@ -336,8 +508,6 @@ def f_tmdbpersontosql(lngpersonid):
                                     strsqlupdatecondition = f"ID_CREDIT = '{strpersoncreditcreditid}'"
                                     f_sqlupdatearray(strsqltablename,arrpersonmoviecouples,strsqlupdatecondition,1)
                                     
-                                    # Read movie data from the TMDb API
-                                    # f_tmdbmovietosql(lngmovieid)
                                 elif strpersoncreditmediatype == "tv":
                                     # This is a TV show
                                     strpersoncredittitle = onecontent['name']
@@ -393,7 +563,6 @@ def f_tmdbpersontosql(lngpersonid):
                 strsqldelete = "DELETE FROM T_WC_TMDB_PERSON_MOVIE WHERE ID_PERSON = " + str(lngpersonid) + " AND ID_CREDIT NOT IN (" + strmoviecredits + ")"
                 # print(f"{strsqldelete}")
                 cursor2 = connectioncp.cursor()
-                # Executing the query
                 cursor2.execute(strsqldelete)
                 connectioncp.commit()
                 if strseriecredits == "":
@@ -401,7 +570,6 @@ def f_tmdbpersontosql(lngpersonid):
                 strsqldelete = "DELETE FROM T_WC_TMDB_PERSON_SERIE WHERE ID_PERSON = " + str(lngpersonid) + " AND ID_CREDIT NOT IN (" + strseriecredits + ")"
                 # print(f"{strsqldelete}")
                 cursor2 = connectioncp.cursor()
-                # Executing the query
                 cursor2.execute(strsqldelete)
                 connectioncp.commit()
 
@@ -418,10 +586,7 @@ def f_tmdbpersonexist(lngpersonid):
         strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapipersonurl
         # print(strtmdbapifullurl)
         response = requests.get(strtmdbapifullurl, headers=headers)
-        # strapiperson = response.text
-        # Parse the JSON data into a dictionary
         data = response.json()
-        # print(response.text)
         lngpersonstatuscode = 0
         if 'status_code' in data:
             lngpersonstatuscode = data['status_code']
@@ -460,6 +625,29 @@ def f_tmdbpersondelete(lngpersonid):
         cursor2.execute(strsqlupdate)
         connectioncp.commit()
         
+def f_tmdbpersonsetcreditscompleted(lngpersonid):
+    global paris_tz
+    global connectioncp
+    
+    if lngpersonid > 0:
+        cursor2 = connectioncp.cursor()
+        strsqltablename = "T_WC_TMDB_PERSON"
+        strsqlupdatecondition = f"ID_PERSON = {lngpersonid}"
+        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
+        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
+        cursor2.execute(strsqlupdate)
+        connectioncp.commit()
+
+def f_tmdbpersonimagestosql(lngpersonid):
+    f_tmdbcontentimagesstosql(lngpersonid, "person", "T_WC_TMDB_PERSON", "T_WC_TMDB_PERSON_IMAGE", "ID_PERSON")
+    
+def f_tmdbpersontosqleverything(lngpersonid):
+    f_tmdbpersontosql(lngpersonid)
+    f_tmdbpersonsetcreditscompleted(lngpersonid)
+    f_tmdbpersonimagestosql(lngpersonid)
+
+# https://developer.themoviedb.org/reference/movie-details
 
 def f_tmdbmovietosql(lngmovieid):
     global strtmdbapidomainurl
@@ -505,10 +693,7 @@ def f_tmdbmovietosql(lngmovieid):
             print(f"f_tmdbmovietosql({lngmovieid}) failed!")
             return
         
-        # Parse the JSON data into a dictionary
         data = response.json()
-        
-        # print(response.text)
         lngmoviestatuscode = 0
         if 'status_code' in data:
             lngmoviestatuscode = data['status_code']
@@ -861,7 +1046,6 @@ def f_tmdbmovietosql(lngmovieid):
             strsqldelete = "DELETE FROM T_WC_TMDB_PERSON_MOVIE WHERE ID_MOVIE = " + str(lngmovieid) + " AND ID_CREDIT NOT IN (" + strpersoncredits + ")"
             # print(f"{strsqldelete}")
             cursor2 = connectioncp.cursor()
-            # Executing the query
             cursor2.execute(strsqldelete)
             connectioncp.commit()
 
@@ -907,10 +1091,7 @@ def f_tmdbmovielangtosql(lngmovieid, strlang):
             print(f"f_tmdbmovietosql({lngmovieid}) failed!")
             return
         
-        # Parse the JSON data into a dictionary
         data = response.json()
-        
-        # print(response.text)
         lngmoviestatuscode = 0
         if 'status_code' in data:
             lngmoviestatuscode = data['status_code']
@@ -1002,10 +1183,7 @@ def f_tmdbmoviekeywordstosql(lngmovieid):
         else:
             response = requests.get(strtmdbapifullurl, headers=headers)
             strapimoviekeywords = response.text
-            # Parse the JSON data into a dictionary
             jsonmoviekeywords = response.json()
-            # print("jsonmoviekeywords:")
-            # print(jsonmoviekeywords)
             lngmoviekeywordsstatuscode = 0
             if 'status_code' in jsonmoviekeywords:
                 lngmoviekeywordsstatuscode = jsonmoviekeywords['status_code']
@@ -1041,10 +1219,7 @@ def f_tmdbmovieexist(lngmovieid):
         strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimovieurl
         # print(strtmdbapifullurl)
         response = requests.get(strtmdbapifullurl, headers=headers)
-        # strapimovie = response.text
-        # Parse the JSON data into a dictionary
         data = response.json()
-        # print(response.text)
         lngmoviestatuscode = 0
         if 'status_code' in data:
             lngmoviestatuscode = data['status_code']
@@ -1113,397 +1288,6 @@ def f_tmdbmoviedelete(lngmovieid):
         cursor2.execute(strsqlupdate)
         connectioncp.commit()
 
-def f_tmdbcollectiontosql(lngcollectionid):
-    global strtmdbapidomainurl
-    global headers
-    global strlanguagecountry
-    global strlanguage
-    
-    if lngcollectionid > 0:
-        strtmdbapicollectionurl = "3/collection/" + str(lngcollectionid) + "?language=" + strlanguagecountry
-        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapicollectionurl
-        # print(strtmdbapifullurl)
-        response = requests.get(strtmdbapifullurl, headers=headers)
-        # strapicollection = response.text
-        # Parse the JSON data into a dictionary
-        data = response.json()
-        
-        strapicollectionfordb = json.dumps(data, ensure_ascii=False)
-        
-        # print(response.json)
-        lngcollectionstatuscode = 0
-        if 'status_code' in data:
-            lngcollectionstatuscode = data['status_code']
-        if lngcollectionstatuscode <= 1:
-            # API request result is not an error
-            # Extract data using the keys
-            strcollectionoverview = ""
-            if 'overview' in data:
-                strcollectionoverview = data['overview']
-            strcollectionposterpath = ""
-            if 'poster_path' in data:
-                strcollectionposterpath = data['poster_path']
-            strcollectionname = ""
-            if 'name' in data:
-                strcollectionname = data['name']
-            strcollectionbackdroppath = ""
-            if 'backdrop_path' in data:
-                strcollectionbackdroppath = data['backdrop_path']
-            
-            # print(f"{strcollectionname}")
-            # print(f"{strcollectionbackdroppath}")
-            # print(f"Overview: {strcollectionoverview}")
-            
-            arrcollectioncouples = {}
-            arrcollectioncouples["ID_COLLECTION"] = lngcollectionid
-            arrcollectioncouples["API_URL"] = strtmdbapicollectionurl
-            arrcollectioncouples["CRAWLER_VERSION"] = 1
-            arrcollectioncouples["API_RESULT"] = strapicollectionfordb
-            arrcollectioncouples["OVERVIEW"] = strcollectionoverview
-            arrcollectioncouples["POSTER_PATH"] = strcollectionposterpath
-            if strcollectionname != "":
-                arrcollectioncouples["NAME"] = strcollectionname
-            arrcollectioncouples["BACKDROP_PATH"] = strcollectionbackdroppath
-            
-            strsqltablename = "T_WC_TMDB_COLLECTION"
-            strsqlupdatecondition = f"ID_COLLECTION = {lngcollectionid}"
-            f_sqlupdatearray(strsqltablename,arrcollectioncouples,strsqlupdatecondition,1)
-
-def f_tmdbcollectionlangtosql(lngcollectionid, strlang):
-    global strtmdbapidomainurl
-    global headers
-    global strlanguagecountry
-    global strlanguage
-    global strdatepattern
-    global connectioncp
-    
-    if lngcollectionid > 0:
-        # New TMDb API call with append_to_response since 2024-05-24 10:00
-        strtmdbapicollectionurl = "3/collection/" + str(lngcollectionid) + "?language=" + strlang
-        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapicollectionurl
-        # print(strtmdbapifullurl)
-        response = requests.get(strtmdbapifullurl, headers=headers)
-        # strapicollection = response.text
-        # Parse the JSON data into a dictionary
-        data = response.json()
-        
-        # print(response.text)
-        lngcollectionstatuscode = 0
-        if 'status_code' in data:
-            lngcollectionstatuscode = data['status_code']
-        if lngcollectionstatuscode <= 1:
-            # API request result is not an error
-            # Extract data using the keys
-            strcollectionoverview = ""
-            if 'overview' in data:
-                strcollectionoverview = data['overview']
-            strcollectionposterpath = ""
-            if 'poster_path' in data:
-                strcollectionposterpath = data['poster_path']
-            strcollectionname = ""
-            if 'name' in data:
-                strcollectionname = data['name']
-            strcollectionbackdroppath = ""
-            if 'backdrop_path' in data:
-                strcollectionbackdroppath = data['backdrop_path']
-            
-            if strcollectionname:
-                if len(strcollectionname) > 250:
-                    # If title is too long, we chop it
-                    strcollectionname = strcollectionname[:250]
-            
-            arrcollectioncouples = {}
-            arrcollectioncouples["API_URL"] = strtmdbapicollectionurl
-            arrcollectioncouples["OVERVIEW"] = strcollectionoverview
-            arrcollectioncouples["ID_COLLECTION"] = lngcollectionid
-            arrcollectioncouples["LANG"] = strlang
-            arrcollectioncouples["POSTER_PATH"] = strcollectionposterpath
-            if strcollectionname != "":
-                arrcollectioncouples["NAME"] = strcollectionname
-            arrcollectioncouples["BACKDROP_PATH"] = strcollectionbackdroppath
-            
-            if 'overview' in data:
-                encoded_overview = data['overview'].replace('\n', '\\n').replace('"', '\\"')
-                data['overview'] = encoded_overview
-            strapicollectionfordb = json.dumps(data, ensure_ascii=False)
-            arrcollectioncouples["API_RESULT"] = strapicollectionfordb
-            arrcollectioncouples["CRAWLER_VERSION"] = 3
-            
-            strsqltablename = "T_WC_TMDB_COLLECTION_LANG"
-            strsqlupdatecondition = f"ID_COLLECTION = {lngcollectionid} AND LANG = '{strlang}'"
-            f_sqlupdatearray(strsqltablename,arrcollectioncouples,strsqlupdatecondition,1)
-
-def f_tmdbcompanytosql(lngcompanyid):
-    global strtmdbapidomainurl
-    global headers
-    global strlanguagecountry
-    global strlanguage
-    
-    if lngcompanyid > 0:
-        strtmdbapicompanyurl = "3/company/" + str(lngcompanyid)
-        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapicompanyurl
-        # print(strtmdbapifullurl)
-        response = requests.get(strtmdbapifullurl, headers=headers)
-        # strapicompany = response.text
-        # Parse the JSON data into a dictionary
-        data = response.json()
-        
-        strapicompanyfordb = json.dumps(data, ensure_ascii=False)
-        
-        # print(response.json)
-        lngcompanystatuscode = 0
-        if 'status_code' in data:
-            lngcompanystatuscode = data['status_code']
-        if lngcompanystatuscode <= 1:
-            # API request result is not an error
-            # Extract data using the keys
-            strcompanydescription = ""
-            if 'description' in data:
-                strcompanydescription = data['description']
-            strcompanylogopath = ""
-            if 'logo_path' in data:
-                strcompanylogopath = data['logo_path']
-            strcompanyname = ""
-            if 'name' in data:
-                strcompanyname = data['name']
-            strcompanyheadquarters = ""
-            if 'headquarters' in data:
-                strcompanyheadquarters = data['headquarters']
-            strcompanyhomepage = ""
-            if 'homepage' in data:
-                strcompanyhomepage = data['homepage']
-            strcompanyorigincountry = ""
-            if 'origin_country' in data:
-                strcompanyorigincountry = data['origin_country']
-            lngcompanyparentid = 0
-            if 'parent_company' in data:
-                if data['parent_company']:
-                    if 'id' in data['parent_company']:
-                        lngcompanyparentid = data['parent_company']['id']
-            
-            if strcompanyhomepage: 
-                if len(strcompanyhomepage) > 500:
-                    # If homepage URL is too long, we chop it
-                    strcompanyhomepage = strcompanyhomepage[:500]
-            if strcompanyheadquarters: 
-                if len(strcompanyheadquarters) > 200:
-                    # If headquarters data is too long, we chop it
-                    strcompanyheadquarters = strcompanyheadquarters[:200]
-            
-            # print(f"{strcompanyname}")
-            
-            arrcompanycouples = {}
-            arrcompanycouples["ID_COMPANY"] = lngcompanyid
-            arrcompanycouples["API_URL"] = strtmdbapicompanyurl
-            arrcompanycouples["CRAWLER_VERSION"] = 1
-            arrcompanycouples["API_RESULT"] = strapicompanyfordb
-            if strcompanydescription != "":
-                arrcompanycouples["DESCRIPTION"] = strcompanydescription
-            if strcompanylogopath != "":
-                arrcompanycouples["LOGO_PATH"] = strcompanylogopath
-            if strcompanyname != "":
-                arrcompanycouples["NAME"] = strcompanyname
-            if strcompanyheadquarters != "":
-                arrcompanycouples["HEADQUARTERS"] = strcompanyheadquarters
-            if strcompanyhomepage != "":
-                arrcompanycouples["HOMEPAGE_URL"] = strcompanyhomepage
-            if strcompanyorigincountry != "":
-                arrcompanycouples["ORIGIN_COUNTRY"] = strcompanyorigincountry
-            arrcompanycouples["ID_PARENT"] = lngcompanyparentid
-            
-            strsqltablename = "T_WC_TMDB_COMPANY"
-            strsqlupdatecondition = f"ID_COMPANY = {lngcompanyid}"
-            f_sqlupdatearray(strsqltablename,arrcompanycouples,strsqlupdatecondition,1)
-
-def f_tmdbnetworktosql(lngnetworkid):
-    global strtmdbapidomainurl
-    global headers
-    global strlanguagecountry
-    global strlanguage
-    
-    if lngnetworkid > 0:
-        strtmdbapinetworkurl = "3/network/" + str(lngnetworkid)
-        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapinetworkurl
-        # print(strtmdbapifullurl)
-        response = requests.get(strtmdbapifullurl, headers=headers)
-        # strapinetwork = response.text
-        # Parse the JSON data into a dictionary
-        data = response.json()
-        
-        strapinetworkfordb = json.dumps(data, ensure_ascii=False)
-        
-        # print(response.json)
-        lngnetworkstatuscode = 0
-        if 'status_code' in data:
-            lngnetworkstatuscode = data['status_code']
-        if lngnetworkstatuscode <= 1:
-            # API request result is not an error
-            # Extract data using the keys
-            strnetworklogopath = ""
-            if 'logo_path' in data:
-                strnetworklogopath = data['logo_path']
-            strnetworkname = ""
-            if 'name' in data:
-                strnetworkname = data['name']
-            strnetworkhomepage = ""
-            if 'homepage' in data:
-                strnetworkhomepage = data['homepage']
-            strnetworkorigincountry = ""
-            if 'origin_country' in data:
-                strnetworkorigincountry = data['origin_country']
-            lngnetworkparentid = 0
-            
-            if strnetworkhomepage: 
-                if len(strnetworkhomepage) > 500:
-                    # If homepage URL is too long, we chop it
-                    strnetworkhomepage = strnetworkhomepage[:500]
-            
-            # print(f"{strnetworkname}")
-            
-            arrnetworkcouples = {}
-            arrnetworkcouples["ID_NETWORK"] = lngnetworkid
-            arrnetworkcouples["API_URL"] = strtmdbapinetworkurl
-            arrnetworkcouples["CRAWLER_VERSION"] = 1
-            arrnetworkcouples["API_RESULT"] = strapinetworkfordb
-            if strnetworklogopath != "":
-                arrnetworkcouples["LOGO_PATH"] = strnetworklogopath
-            if strnetworkname != "":
-                arrnetworkcouples["NAME"] = strnetworkname
-            if strnetworkhomepage != "":
-                arrnetworkcouples["HOMEPAGE_URL"] = strnetworkhomepage
-            if strnetworkorigincountry != "":
-                arrnetworkcouples["ORIGIN_COUNTRY"] = strnetworkorigincountry
-            
-            strsqltablename = "T_WC_TMDB_NETWORK"
-            strsqlupdatecondition = f"ID_NETWORK = {lngnetworkid}"
-            f_sqlupdatearray(strsqltablename,arrnetworkcouples,strsqlupdatecondition,1)
-
-def f_tmdblisttosql(lnglistid):
-    global strtmdbapidomainurl
-    global headers
-    global strlanguagecountry
-    global strlanguage
-    
-    if lnglistid > 0:
-        lngpage = 1
-        lngdisplayorder = 0
-        lngtotalpages = 0
-        strmovieidlist = ""
-        strserieidlist = ""
-        intencore = True
-        while intencore:
-            strtmdbapilisturl = "3/list/" + str(lnglistid) + "?language=" + strlanguagecountry + "&page=" + str(lngpage)
-            strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapilisturl
-            # print(strtmdbapifullurl)
-            response = requests.get(strtmdbapifullurl, headers=headers)
-            # strapilist = response.text
-            # Parse the JSON data into a dictionary
-            data = response.json()
-            strapilistfordb = json.dumps(data, ensure_ascii=False)
-            
-            # print(response.json)
-            lngliststatuscode = 0
-            if 'status_code' in data:
-                lngliststatuscode = data['status_code']
-            if lngliststatuscode <= 1:
-                # API request result is not an error
-                if lngpage == 1:
-                    # Extract data using the keys
-                    strlistdesc = ""
-                    if 'description' in data:
-                        strlistdesc = data['description']
-                    strlistposterpath = ""
-                    if 'poster_path' in data:
-                        strlistposterpath = data['poster_path']
-                    strlistname = ""
-                    if 'name' in data:
-                        strlistname = data['name']
-                    strcreatedby = ""
-                    if 'created_by' in data:
-                        strcreatedby = data['created_by']
-                    
-                    # print(f"{strlistname}")
-                    # print(f"{strlistposterpath}")
-                    # print(f"Description: {strlistdesc}")
-                    
-                    arrlistcouples = {}
-                    arrlistcouples["ID_LIST"] = lnglistid
-                    arrlistcouples["API_URL"] = strtmdbapilisturl
-                    arrlistcouples["CRAWLER_VERSION"] = 1
-                    arrlistcouples["API_RESULT"] = strapilistfordb
-                    arrlistcouples["DESCRIPTION"] = strlistdesc
-                    arrlistcouples["POSTER_PATH"] = strlistposterpath
-                    if strlistname != "":
-                        arrlistcouples["NAME"] = strlistname
-                    if strcreatedby != "":
-                        arrlistcouples["CREATED_BY"] = strcreatedby
-                    
-                    strsqltablename = "T_WC_TMDB_LIST"
-                    strsqlupdatecondition = f"ID_LIST = {lnglistid}"
-                    f_sqlupdatearray(strsqltablename,arrlistcouples,strsqlupdatecondition,1)
-                results = data['items']
-                lngtotalpages = data['total_pages']
-                for row in results:
-                    lngmovieid = row['id']
-                    intadult = row['adult']
-                    strmediatype = row['media_type'];
-                    #if not intadult:
-                    if 1:
-                        # We can refresh this list element
-                        if strmediatype == "movie":
-                            # It is a movie
-                            lngdisplayorder += 1
-                            if strmovieidlist != "":
-                                strmovieidlist += ","
-                            strmovieidlist += str(lngmovieid)
-                            arrlistcouples = {}
-                            arrlistcouples["ID_LIST"] = lnglistid
-                            arrlistcouples["ID_MOVIE"] = lngmovieid
-                            arrlistcouples["DISPLAY_ORDER"] = lngdisplayorder
-                            strsqltablename = "T_WC_TMDB_MOVIE_LIST"
-                            strsqlupdatecondition = f"ID_LIST = {lnglistid} AND ID_MOVIE = {lngmovieid}"
-                            f_sqlupdatearray(strsqltablename,arrlistcouples,strsqlupdatecondition,1)
-                        else:
-                            # It is a TV serie
-                            lngdisplayorder += 1
-                            if strserieidlist != "":
-                                strserieidlist += ","
-                            strserieidlist += str(lngmovieid)
-                            arrlistcouples = {}
-                            arrlistcouples["ID_LIST"] = lnglistid
-                            arrlistcouples["ID_SERIE"] = lngmovieid
-                            arrlistcouples["DISPLAY_ORDER"] = lngdisplayorder
-                            strsqltablename = "T_WC_TMDB_SERIE_LIST"
-                            strsqlupdatecondition = f"ID_LIST = {lnglistid} AND ID_SERIE = {lngmovieid}"
-                            f_sqlupdatearray(strsqltablename,arrlistcouples,strsqlupdatecondition,1)
-            lngpage += 1
-            if lngpage > lngtotalpages:
-                intencore = False
-        if strmovieidlist != "":
-            strsqldelete = "DELETE FROM " + strsqlns + "TMDB_MOVIE_LIST WHERE ID_LIST = " + str(lnglistid) + " AND ID_MOVIE NOT IN (" + strmovieidlist + ") "
-            cursor2 = connectioncp.cursor()
-            cursor2.execute(strsqldelete)
-            connectioncp.commit()
-        if strserieidlist != "":
-            strsqldelete = "DELETE FROM " + strsqlns + "TMDB_SERIE_LIST WHERE ID_LIST = " + str(lnglistid) + " AND ID_SERIE NOT IN (" + strserieidlist + ") "
-            cursor2 = connectioncp.cursor()
-            cursor2.execute(strsqldelete)
-            connectioncp.commit()
-
-def f_tmdbpersonsetcreditscompleted(lngpersonid):
-    global paris_tz
-    global connectioncp
-    
-    if lngpersonid > 0:
-        cursor2 = connectioncp.cursor()
-        strsqltablename = "T_WC_TMDB_PERSON"
-        strsqlupdatecondition = f"ID_PERSON = {lngpersonid}"
-        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
-        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
-        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
-        cursor2.execute(strsqlupdate)
-        connectioncp.commit()
-
 def f_tmdbmoviesetcreditscompleted(lngmovieid):
     global paris_tz
     global connectioncp
@@ -1560,6 +1344,9 @@ def f_tmdbmoviesetwikipediacompleted(lngmovieid):
         cursor2.execute(strsqlupdate)
         connectioncp.commit()
 
+def f_tmdbmovieimagestosql(lngmovieid):
+    f_tmdbcontentimagesstosql(lngmovieid, "movie", "T_WC_TMDB_MOVIE", "T_WC_TMDB_MOVIE_IMAGE", "ID_MOVIE")
+    
 def f_tmdbmovietosqleverything(lngmovieid):
     f_tmdbmovietosql(lngmovieid)
     f_tmdbmovielangtosql(lngmovieid,'fr')
@@ -1567,250 +1354,6 @@ def f_tmdbmovietosqleverything(lngmovieid):
     f_tmdbmoviekeywordstosql(lngmovieid)
     f_tmdbmoviesetkeywordscompleted(lngmovieid)
     f_tmdbmovieimagestosql(lngmovieid)
-
-def f_tmdbcollectionsetcreditscompleted(lngcollectionid):
-    global paris_tz
-    global connectioncp
-    
-    if lngcollectionid > 0:
-        cursor2 = connectioncp.cursor()
-        strsqltablename = "T_WC_TMDB_COLLECTION"
-        strsqlupdatecondition = f"ID_COLLECTION = {lngcollectionid}"
-        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
-        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
-        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
-        cursor2.execute(strsqlupdate)
-        connectioncp.commit()
-
-def f_tmdblistsetcreditscompleted(lnglistid):
-    global paris_tz
-    global connectioncp
-    
-    if lnglistid > 0:
-        cursor2 = connectioncp.cursor()
-        strsqltablename = "T_WC_TMDB_LIST"
-        strsqlupdatecondition = f"ID_LIST = {lnglistid}"
-        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
-        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
-        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
-        cursor2.execute(strsqlupdate)
-        connectioncp.commit()
-
-def f_tmdbcompanysetcreditscompleted(lngcompanyid):
-    global paris_tz
-    global connectioncp
-    
-    if lngcompanyid > 0:
-        cursor2 = connectioncp.cursor()
-        strsqltablename = "T_WC_TMDB_COMPANY"
-        strsqlupdatecondition = f"ID_COMPANY = {lngcompanyid}"
-        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
-        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
-        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
-        cursor2.execute(strsqlupdate)
-        connectioncp.commit()
-
-def f_tmdbnetworksetcreditscompleted(lngnetworkid):
-    global paris_tz
-    global connectioncp
-    
-    if lngnetworkid > 0:
-        cursor2 = connectioncp.cursor()
-        strsqltablename = "T_WC_TMDB_NETWORK"
-        strsqlupdatecondition = f"ID_NETWORK = {lngnetworkid}"
-        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
-        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
-        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
-        cursor2.execute(strsqlupdate)
-        connectioncp.commit()
-
-def f_extract_imdb_id(text):
-    # Regular expression to find IMDb IDs
-    # 'tt' followed by 7 to 9 digits (commonly), but allows for more or fewer digits
-    pattern = r'tt\d{5,10}'
-    # Find the first match in the text
-    match = re.search(pattern, text)
-    # Return the IMDb ID if found, otherwise return None
-    return match.group(0) if match else ""
-
-def f_extract_movie_year(strplexmovieitemfile):
-    # Regular expression to find 4-digit numbers
-    strpattern = r'\b\d{4}\b'
-    # Find all matches in the text
-    arryears = re.findall(strpattern, strplexmovieitemfile)
-    lngfilemovieyear = 0
-    strfilemovietitle = ""
-    for stryear in arryears:
-        if stryear != "1080" and stryear != "2160":
-            # Skipping 1080 and 2160
-            lngpos = strplexmovieitemfile.find(stryear)
-            if lngpos > 0:
-                # Year is not the first character of the file name so year is not part of the title
-                lngfilemovieyear = int(stryear)
-                # lngmovieyear = lngfilemovieyear
-                # Set strfilemovietitle !!!!!!!!!!!!!!!!!!!!
-                strfilemovietitle = strplexmovieitemfile[:(lngpos-1)]
-                strfilemovietitle.strip()
-                break
-    # print(f"{strplexmovieitemfile} -> {lngfilemovieyear}, {strfilemovietitle}")
-    return lngfilemovieyear, strfilemovietitle
-
-def f_tmdbmoviesearch(strplexmovietitle,strfilemovietitle,lngplexmovieyear,lngfilemovieyear):
-    global strlanguagecountry
-    global strlanguage
-    global strtmdbapidomainurl
-    global headers
-    global strdatepattern
-    
-    print(f"f_tmdbmoviesearch('{strplexmovietitle}','{strfilemovietitle}',{lngplexmovieyear},{lngfilemovieyear})")
-    lngmovieyear = lngfilemovieyear
-    if lngfilemovieyear == 0:
-        # Year not found in title so we use the year provided by Plex
-        lngmovieyear = lngplexmovieyear
-    if lngmovieyear == 0:
-        # Movie year unknown
-        lngtotalresults = 0
-    else:
-        strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&primary_release_year=" + str(lngmovieyear) + "&page=1"
-        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
-        # print(strtmdbapifullurl)
-        response = requests.get(strtmdbapifullurl, headers=headers)
-        # strapimovie = response.text
-        # Parse the JSON data into a dictionary
-        data = response.json()
-        # print(data)
-        results = data['results']
-        lngtotalresults = data['total_results']
-    if lngtotalresults == 0:
-        if lngmovieyear == 0:
-            # Movie year unknown
-            lngtotalresults = 0
-        else:
-            # No result so we will query in the previous year
-            lngmovieyear = lngmovieyear-1
-            # Process the line
-            strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&primary_release_year=" + str(lngmovieyear) + "&page=1"
-            strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
-            # print(strtmdbapifullurl)
-            response = requests.get(strtmdbapifullurl, headers=headers)
-            # strapimovie = response.text
-            # Parse the JSON data into a dictionary
-            data = response.json()
-            # print(data)
-            results = data['results']
-            lngtotalresults = data['total_results']
-        if lngtotalresults == 0:
-            if lngmovieyear == 0:
-                # Movie year unknown
-                lngtotalresults = 0
-            else:
-                # No result so we will query in the next year
-                lngmovieyear = lngmovieyear+2
-                # Process the line
-                strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&primary_release_year=" + str(lngmovieyear) + "&page=1"
-                strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
-                # print(strtmdbapifullurl)
-                response = requests.get(strtmdbapifullurl, headers=headers)
-                # strapimovie = response.text
-                # Parse the JSON data into a dictionary
-                data = response.json()
-                # print(data)
-                results = data['results']
-                lngtotalresults = data['total_results']
-            if lngtotalresults == 0:
-                # No result so we will query wthout the year parameter
-                lngmovieyear = 0
-                # Process the line
-                strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&page=1"
-                strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
-                # print(strtmdbapifullurl)
-                response = requests.get(strtmdbapifullurl, headers=headers)
-                # strapimovie = response.text
-                # Parse the JSON data into a dictionary
-                data = response.json()
-                # print(data)
-                results = data['results']
-                lngtotalresults = data['total_results']
-    lngmovieid = 0
-    lngmovieyear = 0
-    strmovietitle = ""
-    strmovieoriginaltitle = ""
-    if lngtotalresults > 0:
-        # a single result for this movie in the TMDb API 
-        # or several results and we take the first one
-        for row in results:
-            lngmovieid = row['id']
-            strmovietitle = row['title']
-            strmovieoriginaltitle = row['original_title']
-            # print(f"-> Unique TMDbid = {lngmovieid}")
-            if 'release_date' in row:
-                # Release date is also found
-                if re.match(strdatepattern, row['release_date']):
-                    # And release date is valid
-                    strmoviereleasedate = row['release_date']
-                    # Extract release year
-                    lngmovieyear = int(strmoviereleasedate[:4])
-            # When we have a result, we exit the for loop
-            break
-    # This returns a tuple containing both lngmovieid, lngmovieyear and strmovietitle
-    print(f"-> {lngmovieid},{lngmovieyear},'{strmovietitle}','{strmovieoriginaltitle}'")
-    return lngmovieid, lngmovieyear, strmovietitle, strmovieoriginaltitle
-
-def f_stringtosql(strtext):
-    return "'" + strtext.replace("'","\\'") + "'"
-
-def f_getservervariable(strvarname,lnglang=0):
-    global strsqlns
-    global connectioncp
-    
-    cursor2 = connectioncp.cursor()
-    strresult = ""
-    strsqlselect = "SELECT VAR_VALUE FROM " + strsqlns + "SERVER_VARIABLE WHERE DELETED = 0 AND VAR_NAME = " + f_stringtosql(strvarname)
-    if lnglang > 0:
-        # Language is managed for server variables
-        strsqlselect += " AND ID_LANG = " + str(lnglang)
-    cursor2.execute(strsqlselect)
-    results = cursor2.fetchall()
-    for row in results:
-        strresult = row['VAR_VALUE']
-        break
-    return strresult
-    
-def f_setservervariable(strvarname,strvarvalue,strvardesc="",lnglang=0):
-    global strsqlns
-    
-    arrcouples = {}
-    arrcouples["VAR_NAME"] = strvarname
-    arrcouples["VAR_VALUE"] = strvarvalue
-    arrcouples["DESCRIPTION"] = strvarname
-    arrcouples["LONG_DESC"] = strvardesc
-    arrcouples["ID_LANG"] = lnglang
-    # print(arrcouples)
-    strsqltablename = strsqlns + "SERVER_VARIABLE"
-    strsqlupdatecondition = f"DELETED = 0 AND VAR_NAME = '{strvarname}'"
-    f_sqlupdatearray(strsqltablename,arrcouples,strsqlupdatecondition,1)
-
-def f_genrestranslatefr(strmoviegenres):
-    strmoviegenres = strmoviegenres.replace("|Action|","|Action|")
-    strmoviegenres = strmoviegenres.replace("|Adventure|","|Aventure|")
-    strmoviegenres = strmoviegenres.replace("|Animation|","|Animation|")
-    strmoviegenres = strmoviegenres.replace("|Comedy|","|Comédie|")
-    strmoviegenres = strmoviegenres.replace("|Crime|","|Crime|")
-    strmoviegenres = strmoviegenres.replace("|Documentary|","|Documentaire|")
-    strmoviegenres = strmoviegenres.replace("|Drama|","|Drame|")
-    strmoviegenres = strmoviegenres.replace("|Family|","|Familial|")
-    strmoviegenres = strmoviegenres.replace("|Fantasy|","|Fantastique|")
-    strmoviegenres = strmoviegenres.replace("|History|","|Histoire|")
-    strmoviegenres = strmoviegenres.replace("|Horror|","|Horreur|")
-    strmoviegenres = strmoviegenres.replace("|Music|","|Musique|")
-    strmoviegenres = strmoviegenres.replace("|Mystery|","|Mystère|")
-    strmoviegenres = strmoviegenres.replace("|Romance|","|Romance|")
-    strmoviegenres = strmoviegenres.replace("|Science Fiction|","|Science-Fiction|")
-    strmoviegenres = strmoviegenres.replace("|Thriller|","|Thriller|")
-    strmoviegenres = strmoviegenres.replace("|TV Movie|","|Téléfilm|")
-    strmoviegenres = strmoviegenres.replace("|War|","|Guerre|")
-    strmoviegenres = strmoviegenres.replace("|Western|","|Western|")
-    return strmoviegenres
 
 # https://developer.themoviedb.org/reference/tv-series-details
 
@@ -2344,11 +1887,7 @@ def f_tmdbserielangtosql(lngserieid, strlang):
         strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiserieurl
         # print(strtmdbapifullurl)
         response = requests.get(strtmdbapifullurl, headers=headers)
-        # strapiserie = response.text
-        # Parse the JSON data into a dictionary
         data = response.json()
-        
-        # print(response.text)
         lngseriestatuscode = 0
         if 'status_code' in data:
             lngseriestatuscode = data['status_code']
@@ -2440,10 +1979,7 @@ def f_tmdbseriekeywordstosql(lngserieid):
         else:
             response = requests.get(strtmdbapifullurl, headers=headers)
             strapiseriekeywords = response.text
-            # Parse the JSON data into a dictionary
             jsonseriekeywords = response.json()
-            # print("jsonseriekeywords:")
-            # print(jsonseriekeywords)
             lngseriekeywordsstatuscode = 0
             if 'status_code' in jsonseriekeywords:
                 lngseriekeywordsstatuscode = jsonseriekeywords['status_code']
@@ -2480,10 +2016,7 @@ def f_tmdbserieexist(lngserieid):
         strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiserieurl
         # print(strtmdbapifullurl)
         response = requests.get(strtmdbapifullurl, headers=headers)
-        # strapiserie = response.text
-        # Parse the JSON data into a dictionary
         data = response.json()
-        # print(response.text)
         lngseriestatuscode = 0
         if 'status_code' in data:
             lngseriestatuscode = data['status_code']
@@ -2608,173 +2141,680 @@ def f_tmdbseriesetwikipediacompleted(lngserieid):
         cursor2.execute(strsqlupdate)
         connectioncp.commit()
 
-def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, strsqltablename, strkeyfieldname):
-    """
-    Fetch images for a content from TMDb API and store them in the T_WC_TMDB_*_IMAGE table.
-    
-    Args:
-        lngcontentid (int): TMDb ID of the content
-        
-    Returns:
-        bool: True if successful, False if failed
-    """
-    global strtmdbapidomainurl
-    global headers
-    global connectioncp
-    global strsqlns
-    global paris_tz
-    
-    if lngcontentid <= 0:
-        print(f"Error: Invalid {strcontenttype} ID {lngcontentid}")
-        return False
-    
-    strtmdbapiimagesurl = f"3/{strcontenttype}/{lngcontentid}/images"
-    strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiimagesurl
-    
-    # Add retry logic with error handling
-    intencore = True
-    intattemptsremaining = 5
-    intsuccess = False
-    
-    while intencore:
-        try:
-            response = requests.get(strtmdbapifullurl, headers=headers)
-            intencore = False
-            intsuccess = True
-        except requests.exceptions.HTTPError as http_err:
-            print(f'HTTP error occurred: {http_err}')
-        except requests.exceptions.ConnectionError as conn_err:
-            print(f'Connection error occurred: {conn_err}')
-        except requests.exceptions.Timeout as timeout_err:
-            print(f'Timeout error occurred: {timeout_err}')
-        except requests.exceptions.RequestException as req_err:
-            print(f'Request error occurred: {req_err}')
-        except Exception as err:
-            print(f'An error occurred: {err}')
-        
-        if intencore:
-            intattemptsremaining = intattemptsremaining - 1
-            if intattemptsremaining >= 0:
-                time.sleep(1)  # Wait for 1 second before next request
-            else:
-                intencore = False
-    
-    if not intsuccess:
-        print(f"f_tmdbcontentimagesstosql({lngcontentid}) failed!")
-        return False
-    
-    # Parse the JSON data into a dictionary
-    data = response.json()
-    
-    # Check for error status code
-    if 'status_code' in data and data['status_code'] > 1:
-        print(f"Error: API returned status code {data['status_code']}")
-        if 'status_message' in data:
-            print(f"Status message: {data['status_message']}")
-        return False
-    
-    # Get current timestamp for database records
-    current_time = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
-    current_date = datetime.now(paris_tz).strftime("%Y-%m-%d")
-    
-    # Track all image paths to clean up obsolete ones later
-    all_image_paths = []
-    
-    # Function to process image arrays (both backdrops and posters)
-    def process_image_array(image_array, image_type):
-        lngdisplayorder = 0
-        for image in image_array:
-            lngdisplayorder += 1
-            
-            # Extract image data
-            image_path = image.get('file_path', '')
-            if not image_path:
-                continue
-                
-            all_image_paths.append(image_path)
-            
-            # Prepare data for database
-            arrimagedata = {
-                strkeyfieldname: lngcontentid,
-                "DISPLAY_ORDER": lngdisplayorder,
-                "DAT_CREAT": current_date,
-                "TIM_UPDATED": current_time,
-                "TYPE_IMAGE": image_type,
-                "LANG": image.get('iso_639_1', ''),
-                "IMAGE_PATH": image_path,
-                "ASPECT_RATIO": image.get('aspect_ratio', 0),
-                "WIDTH": image.get('width', 0),
-                "HEIGHT": image.get('height', 0),
-                "VOTE_AVERAGE": image.get('vote_average', 0),
-                "VOTE_COUNT": image.get('vote_count', 0)
-            }
-            
-            # Update or insert into database
-            strsqlupdatecondition = f"{strkeyfieldname} = {lngcontentid} AND TYPE_IMAGE = '{image_type}' AND IMAGE_PATH = '{image_path}'"
-            f_sqlupdatearray(strsqltablename, arrimagedata, strsqlupdatecondition, 1)
-    
-    # Process backdrops
-    if 'backdrops' in data and data['backdrops']:
-        process_image_array(data['backdrops'], 'backdrop')
-    
-    # Process posters
-    if 'posters' in data and data['posters']:
-        process_image_array(data['posters'], 'poster')
-    
-    # Process logos
-    if 'logos' in data and data['logos']:
-        process_image_array(data['logos'], 'logo')
-    
-    # Process profiles
-    if 'profiles' in data and data['profiles']:
-        process_image_array(data['profiles'], 'profile')
-    
-    # Clean up obsolete images
-    if all_image_paths:
-        # Create a comma-separated list of image paths with quotes
-        image_paths_list = "'" + "', '".join(all_image_paths) + "'"
-        
-        # Delete images that are no longer present in the API response
-        strsqldelete = f"DELETE FROM {strsqltablename} WHERE {strkeyfieldname} = {lngcontentid} AND IMAGE_PATH NOT IN ({image_paths_list})"
-        cursor = connectioncp.cursor()
-        cursor.execute(strsqldelete)
-        connectioncp.commit()
-    else:
-        # If no images were found, delete all images for this contents
-        strsqldelete = f"DELETE FROM {strsqltablename} WHERE {strkeyfieldname} = {lngcontentid}"
-        cursor = connectioncp.cursor()
-        cursor.execute(strsqldelete)
-        connectioncp.commit()
-    
-    # Update the content record to mark images as completed
-    strtimimagescompleted = current_time
-    strsqlupdatecondition = f"{strkeyfieldname} = {lngcontentid}"
-    strsqlupdatesetclause = f"TIM_IMAGES_COMPLETED = '{strtimimagescompleted}'"
-    strsqlupdate = f"UPDATE {strsqlmastertable} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
-    cursor = connectioncp.cursor()
-    cursor.execute(strsqlupdate)
-    connectioncp.commit()
-    
-    return True
-    
 def f_tmdbserieimagestosql(lngserieid):
     f_tmdbcontentimagesstosql(lngserieid, "tv", "T_WC_TMDB_SERIE", "T_WC_TMDB_SERIE_IMAGE", "ID_SERIE")
     
-def f_tmdbmovieimagestosql(lngmovieid):
-    f_tmdbcontentimagesstosql(lngmovieid, "movie", "T_WC_TMDB_MOVIE", "T_WC_TMDB_MOVIE_IMAGE", "ID_MOVIE")
+def f_tmdbserietosqleverything(lngserieid):
+    f_tmdbserietosql(lngserieid)
+    f_tmdbserielangtosql(lngserieid,'fr')
+    f_tmdbseriesetcreditscompleted(lngserieid)
+    f_tmdbseriekeywordstosql(lngserieid)
+    f_tmdbseriesetkeywordscompleted(lngserieid)
+    f_tmdbserieimagestosql(lngserieid)
+
+# https://developer.themoviedb.org/reference/collection-details
+
+def f_tmdbcollectiontosql(lngcollectionid):
+    global strtmdbapidomainurl
+    global headers
+    global strlanguagecountry
+    global strlanguage
     
-def f_tmdbpersonimagestosql(lngpersonid):
-    f_tmdbcontentimagesstosql(lngpersonid, "person", "T_WC_TMDB_PERSON", "T_WC_TMDB_PERSON_IMAGE", "ID_PERSON")
+    if lngcollectionid > 0:
+        strtmdbapicollectionurl = "3/collection/" + str(lngcollectionid) + "?language=" + strlanguagecountry
+        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapicollectionurl
+        # print(strtmdbapifullurl)
+        response = requests.get(strtmdbapifullurl, headers=headers)
+        data = response.json()
+        
+        strapicollectionfordb = json.dumps(data, ensure_ascii=False)
+        
+        # print(response.json)
+        lngcollectionstatuscode = 0
+        if 'status_code' in data:
+            lngcollectionstatuscode = data['status_code']
+        if lngcollectionstatuscode <= 1:
+            # API request result is not an error
+            # Extract data using the keys
+            strcollectionoverview = ""
+            if 'overview' in data:
+                strcollectionoverview = data['overview']
+            strcollectionposterpath = ""
+            if 'poster_path' in data:
+                strcollectionposterpath = data['poster_path']
+            strcollectionname = ""
+            if 'name' in data:
+                strcollectionname = data['name']
+            strcollectionbackdroppath = ""
+            if 'backdrop_path' in data:
+                strcollectionbackdroppath = data['backdrop_path']
+            
+            # print(f"{strcollectionname}")
+            # print(f"{strcollectionbackdroppath}")
+            # print(f"Overview: {strcollectionoverview}")
+            
+            arrcollectioncouples = {}
+            arrcollectioncouples["ID_COLLECTION"] = lngcollectionid
+            arrcollectioncouples["API_URL"] = strtmdbapicollectionurl
+            arrcollectioncouples["CRAWLER_VERSION"] = 1
+            arrcollectioncouples["API_RESULT"] = strapicollectionfordb
+            arrcollectioncouples["OVERVIEW"] = strcollectionoverview
+            arrcollectioncouples["POSTER_PATH"] = strcollectionposterpath
+            if strcollectionname != "":
+                arrcollectioncouples["NAME"] = strcollectionname
+            arrcollectioncouples["BACKDROP_PATH"] = strcollectionbackdroppath
+            
+            strsqltablename = "T_WC_TMDB_COLLECTION"
+            strsqlupdatecondition = f"ID_COLLECTION = {lngcollectionid}"
+            f_sqlupdatearray(strsqltablename,arrcollectioncouples,strsqlupdatecondition,1)
+
+def f_tmdbcollectionlangtosql(lngcollectionid, strlang):
+    global strtmdbapidomainurl
+    global headers
+    global strlanguagecountry
+    global strlanguage
+    global strdatepattern
+    global connectioncp
     
+    if lngcollectionid > 0:
+        # New TMDb API call with append_to_response since 2024-05-24 10:00
+        strtmdbapicollectionurl = "3/collection/" + str(lngcollectionid) + "?language=" + strlang
+        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapicollectionurl
+        # print(strtmdbapifullurl)
+        response = requests.get(strtmdbapifullurl, headers=headers)
+        data = response.json()
+        lngcollectionstatuscode = 0
+        if 'status_code' in data:
+            lngcollectionstatuscode = data['status_code']
+        if lngcollectionstatuscode <= 1:
+            # API request result is not an error
+            # Extract data using the keys
+            strcollectionoverview = ""
+            if 'overview' in data:
+                strcollectionoverview = data['overview']
+            strcollectionposterpath = ""
+            if 'poster_path' in data:
+                strcollectionposterpath = data['poster_path']
+            strcollectionname = ""
+            if 'name' in data:
+                strcollectionname = data['name']
+            strcollectionbackdroppath = ""
+            if 'backdrop_path' in data:
+                strcollectionbackdroppath = data['backdrop_path']
+            
+            if strcollectionname:
+                if len(strcollectionname) > 250:
+                    # If title is too long, we chop it
+                    strcollectionname = strcollectionname[:250]
+            
+            arrcollectioncouples = {}
+            arrcollectioncouples["API_URL"] = strtmdbapicollectionurl
+            arrcollectioncouples["OVERVIEW"] = strcollectionoverview
+            arrcollectioncouples["ID_COLLECTION"] = lngcollectionid
+            arrcollectioncouples["LANG"] = strlang
+            arrcollectioncouples["POSTER_PATH"] = strcollectionposterpath
+            if strcollectionname != "":
+                arrcollectioncouples["NAME"] = strcollectionname
+            arrcollectioncouples["BACKDROP_PATH"] = strcollectionbackdroppath
+            
+            if 'overview' in data:
+                encoded_overview = data['overview'].replace('\n', '\\n').replace('"', '\\"')
+                data['overview'] = encoded_overview
+            strapicollectionfordb = json.dumps(data, ensure_ascii=False)
+            arrcollectioncouples["API_RESULT"] = strapicollectionfordb
+            arrcollectioncouples["CRAWLER_VERSION"] = 3
+            
+            strsqltablename = "T_WC_TMDB_COLLECTION_LANG"
+            strsqlupdatecondition = f"ID_COLLECTION = {lngcollectionid} AND LANG = '{strlang}'"
+            f_sqlupdatearray(strsqltablename,arrcollectioncouples,strsqlupdatecondition,1)
+
+def f_tmdbcollectionsetcreditscompleted(lngcollectionid):
+    global paris_tz
+    global connectioncp
+    
+    if lngcollectionid > 0:
+        cursor2 = connectioncp.cursor()
+        strsqltablename = "T_WC_TMDB_COLLECTION"
+        strsqlupdatecondition = f"ID_COLLECTION = {lngcollectionid}"
+        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
+        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
+        cursor2.execute(strsqlupdate)
+        connectioncp.commit()
+
 def f_tmdbcollectionimagestosql(lngcollectionid):
     f_tmdbcontentimagesstosql(lngcollectionid, "collection", "T_WC_TMDB_COLLECTION", "T_WC_TMDB_COLLECTION_IMAGE", "ID_COLLECTION")
     
+def f_tmdbcollectiontosqleverything(lngcollectionid):
+    f_tmdbcollectiontosql(lngcollectionid)
+    f_tmdbcollectionlangtosql(lngcollectionid,'fr')
+    f_tmdbcollectionsetcreditscompleted(lngcollectionid)
+    f_tmdbcollectionimagestosql(lngcollectionid)
+
+def f_tmdbcompanytosql(lngcompanyid):
+    global strtmdbapidomainurl
+    global headers
+    global strlanguagecountry
+    global strlanguage
+    
+    if lngcompanyid > 0:
+        strtmdbapicompanyurl = "3/company/" + str(lngcompanyid)
+        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapicompanyurl
+        # print(strtmdbapifullurl)
+        response = requests.get(strtmdbapifullurl, headers=headers)
+        data = response.json()
+        
+        strapicompanyfordb = json.dumps(data, ensure_ascii=False)
+        lngcompanystatuscode = 0
+        if 'status_code' in data:
+            lngcompanystatuscode = data['status_code']
+        if lngcompanystatuscode <= 1:
+            # API request result is not an error
+            # Extract data using the keys
+            strcompanydescription = ""
+            if 'description' in data:
+                strcompanydescription = data['description']
+            strcompanylogopath = ""
+            if 'logo_path' in data:
+                strcompanylogopath = data['logo_path']
+            strcompanyname = ""
+            if 'name' in data:
+                strcompanyname = data['name']
+            strcompanyheadquarters = ""
+            if 'headquarters' in data:
+                strcompanyheadquarters = data['headquarters']
+            strcompanyhomepage = ""
+            if 'homepage' in data:
+                strcompanyhomepage = data['homepage']
+            strcompanyorigincountry = ""
+            if 'origin_country' in data:
+                strcompanyorigincountry = data['origin_country']
+            lngcompanyparentid = 0
+            if 'parent_company' in data:
+                if data['parent_company']:
+                    if 'id' in data['parent_company']:
+                        lngcompanyparentid = data['parent_company']['id']
+            
+            if strcompanyhomepage: 
+                if len(strcompanyhomepage) > 500:
+                    # If homepage URL is too long, we chop it
+                    strcompanyhomepage = strcompanyhomepage[:500]
+            if strcompanyheadquarters: 
+                if len(strcompanyheadquarters) > 200:
+                    # If headquarters data is too long, we chop it
+                    strcompanyheadquarters = strcompanyheadquarters[:200]
+            
+            # print(f"{strcompanyname}")
+            
+            arrcompanycouples = {}
+            arrcompanycouples["ID_COMPANY"] = lngcompanyid
+            arrcompanycouples["API_URL"] = strtmdbapicompanyurl
+            arrcompanycouples["CRAWLER_VERSION"] = 1
+            arrcompanycouples["API_RESULT"] = strapicompanyfordb
+            if strcompanydescription != "":
+                arrcompanycouples["DESCRIPTION"] = strcompanydescription
+            if strcompanylogopath != "":
+                arrcompanycouples["LOGO_PATH"] = strcompanylogopath
+            if strcompanyname != "":
+                arrcompanycouples["NAME"] = strcompanyname
+            if strcompanyheadquarters != "":
+                arrcompanycouples["HEADQUARTERS"] = strcompanyheadquarters
+            if strcompanyhomepage != "":
+                arrcompanycouples["HOMEPAGE_URL"] = strcompanyhomepage
+            if strcompanyorigincountry != "":
+                arrcompanycouples["ORIGIN_COUNTRY"] = strcompanyorigincountry
+            arrcompanycouples["ID_PARENT"] = lngcompanyparentid
+            
+            strsqltablename = "T_WC_TMDB_COMPANY"
+            strsqlupdatecondition = f"ID_COMPANY = {lngcompanyid}"
+            f_sqlupdatearray(strsqltablename,arrcompanycouples,strsqlupdatecondition,1)
+
+def f_tmdbcompanysetcreditscompleted(lngcompanyid):
+    global paris_tz
+    global connectioncp
+    
+    if lngcompanyid > 0:
+        cursor2 = connectioncp.cursor()
+        strsqltablename = "T_WC_TMDB_COMPANY"
+        strsqlupdatecondition = f"ID_COMPANY = {lngcompanyid}"
+        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
+        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
+        cursor2.execute(strsqlupdate)
+        connectioncp.commit()
+
 def f_tmdbcompanyimagestosql(lngcompanyid):
     f_tmdbcontentimagesstosql(lngcompanyid, "company", "T_WC_TMDB_COMPANY", "T_WC_TMDB_COMPANY_IMAGE", "ID_COMPANY")
     
+def f_tmdbcompanytosqleverything(lngcompanyid):
+    f_tmdbcompanytosql(lngcompanyid)
+    f_tmdbcompanysetcreditscompleted(lngcompanyid)
+    f_tmdbcompanyimagestosql(lngcompanyid)
+
+# https://developer.themoviedb.org/reference/network-details
+
+def f_tmdbnetworktosql(lngnetworkid):
+    global strtmdbapidomainurl
+    global headers
+    global strlanguagecountry
+    global strlanguage
+    
+    if lngnetworkid > 0:
+        strtmdbapinetworkurl = "3/network/" + str(lngnetworkid)
+        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapinetworkurl
+        # print(strtmdbapifullurl)
+        response = requests.get(strtmdbapifullurl, headers=headers)
+        data = response.json()
+        
+        strapinetworkfordb = json.dumps(data, ensure_ascii=False)
+        lngnetworkstatuscode = 0
+        if 'status_code' in data:
+            lngnetworkstatuscode = data['status_code']
+        if lngnetworkstatuscode <= 1:
+            # API request result is not an error
+            # Extract data using the keys
+            strnetworklogopath = ""
+            if 'logo_path' in data:
+                strnetworklogopath = data['logo_path']
+            strnetworkname = ""
+            if 'name' in data:
+                strnetworkname = data['name']
+            strnetworkhomepage = ""
+            if 'homepage' in data:
+                strnetworkhomepage = data['homepage']
+            strnetworkorigincountry = ""
+            if 'origin_country' in data:
+                strnetworkorigincountry = data['origin_country']
+            lngnetworkparentid = 0
+            
+            if strnetworkhomepage: 
+                if len(strnetworkhomepage) > 500:
+                    # If homepage URL is too long, we chop it
+                    strnetworkhomepage = strnetworkhomepage[:500]
+            
+            # print(f"{strnetworkname}")
+            
+            arrnetworkcouples = {}
+            arrnetworkcouples["ID_NETWORK"] = lngnetworkid
+            arrnetworkcouples["API_URL"] = strtmdbapinetworkurl
+            arrnetworkcouples["CRAWLER_VERSION"] = 1
+            arrnetworkcouples["API_RESULT"] = strapinetworkfordb
+            if strnetworklogopath != "":
+                arrnetworkcouples["LOGO_PATH"] = strnetworklogopath
+            if strnetworkname != "":
+                arrnetworkcouples["NAME"] = strnetworkname
+            if strnetworkhomepage != "":
+                arrnetworkcouples["HOMEPAGE_URL"] = strnetworkhomepage
+            if strnetworkorigincountry != "":
+                arrnetworkcouples["ORIGIN_COUNTRY"] = strnetworkorigincountry
+            
+            strsqltablename = "T_WC_TMDB_NETWORK"
+            strsqlupdatecondition = f"ID_NETWORK = {lngnetworkid}"
+            f_sqlupdatearray(strsqltablename,arrnetworkcouples,strsqlupdatecondition,1)
+
+def f_tmdbnetworksetcreditscompleted(lngnetworkid):
+    global paris_tz
+    global connectioncp
+    
+    if lngnetworkid > 0:
+        cursor2 = connectioncp.cursor()
+        strsqltablename = "T_WC_TMDB_NETWORK"
+        strsqlupdatecondition = f"ID_NETWORK = {lngnetworkid}"
+        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
+        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
+        cursor2.execute(strsqlupdate)
+        connectioncp.commit()
+
 def f_tmdbnetworkimagestosql(lngnetworkid):
     f_tmdbcontentimagesstosql(lngnetworkid, "network", "T_WC_TMDB_NETWORK", "T_WC_TMDB_NETWORK_IMAGE", "ID_NETWORK")
     
+def f_tmdbnetworktosqleverything(lngnetworkid):
+    f_tmdbnetworktosql(lngnetworkid)
+    f_tmdbnetworksetcreditscompleted(lngnetworkid)
+    f_tmdbnetworkimagestosql(lngnetworkid)
+
+# https://developer.themoviedb.org/reference/list-details
+
+def f_tmdblisttosql(lnglistid):
+    global strtmdbapidomainurl
+    global headers
+    global strlanguagecountry
+    global strlanguage
+    
+    if lnglistid > 0:
+        lngpage = 1
+        lngdisplayorder = 0
+        lngtotalpages = 0
+        strmovieidlist = ""
+        strserieidlist = ""
+        intencore = True
+        while intencore:
+            strtmdbapilisturl = "3/list/" + str(lnglistid) + "?language=" + strlanguagecountry + "&page=" + str(lngpage)
+            strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapilisturl
+            # print(strtmdbapifullurl)
+            response = requests.get(strtmdbapifullurl, headers=headers)
+            data = response.json()
+            strapilistfordb = json.dumps(data, ensure_ascii=False)
+            lngliststatuscode = 0
+            if 'status_code' in data:
+                lngliststatuscode = data['status_code']
+            if lngliststatuscode <= 1:
+                # API request result is not an error
+                if lngpage == 1:
+                    # Extract data using the keys
+                    strlistdesc = ""
+                    if 'description' in data:
+                        strlistdesc = data['description']
+                    strlistposterpath = ""
+                    if 'poster_path' in data:
+                        strlistposterpath = data['poster_path']
+                    strlistname = ""
+                    if 'name' in data:
+                        strlistname = data['name']
+                    strcreatedby = ""
+                    if 'created_by' in data:
+                        strcreatedby = data['created_by']
+                    
+                    # print(f"{strlistname}")
+                    # print(f"{strlistposterpath}")
+                    # print(f"Description: {strlistdesc}")
+                    
+                    arrlistcouples = {}
+                    arrlistcouples["ID_LIST"] = lnglistid
+                    arrlistcouples["API_URL"] = strtmdbapilisturl
+                    arrlistcouples["CRAWLER_VERSION"] = 1
+                    arrlistcouples["API_RESULT"] = strapilistfordb
+                    arrlistcouples["DESCRIPTION"] = strlistdesc
+                    arrlistcouples["POSTER_PATH"] = strlistposterpath
+                    if strlistname != "":
+                        arrlistcouples["NAME"] = strlistname
+                    if strcreatedby != "":
+                        arrlistcouples["CREATED_BY"] = strcreatedby
+                    
+                    strsqltablename = "T_WC_TMDB_LIST"
+                    strsqlupdatecondition = f"ID_LIST = {lnglistid}"
+                    f_sqlupdatearray(strsqltablename,arrlistcouples,strsqlupdatecondition,1)
+                results = data['items']
+                lngtotalpages = data['total_pages']
+                for row in results:
+                    lngmovieid = row['id']
+                    intadult = row['adult']
+                    strmediatype = row['media_type'];
+                    if strmediatype == "movie":
+                        # It is a movie
+                        lngdisplayorder += 1
+                        if strmovieidlist != "":
+                            strmovieidlist += ","
+                        strmovieidlist += str(lngmovieid)
+                        arrlistcouples = {}
+                        arrlistcouples["ID_LIST"] = lnglistid
+                        arrlistcouples["ID_MOVIE"] = lngmovieid
+                        arrlistcouples["DISPLAY_ORDER"] = lngdisplayorder
+                        strsqltablename = "T_WC_TMDB_MOVIE_LIST"
+                        strsqlupdatecondition = f"ID_LIST = {lnglistid} AND ID_MOVIE = {lngmovieid}"
+                        f_sqlupdatearray(strsqltablename,arrlistcouples,strsqlupdatecondition,1)
+                    else:
+                        # It is a TV serie
+                        lngdisplayorder += 1
+                        if strserieidlist != "":
+                            strserieidlist += ","
+                        strserieidlist += str(lngmovieid)
+                        arrlistcouples = {}
+                        arrlistcouples["ID_LIST"] = lnglistid
+                        arrlistcouples["ID_SERIE"] = lngmovieid
+                        arrlistcouples["DISPLAY_ORDER"] = lngdisplayorder
+                        strsqltablename = "T_WC_TMDB_SERIE_LIST"
+                        strsqlupdatecondition = f"ID_LIST = {lnglistid} AND ID_SERIE = {lngmovieid}"
+                        f_sqlupdatearray(strsqltablename,arrlistcouples,strsqlupdatecondition,1)
+            lngpage += 1
+            if lngpage > lngtotalpages:
+                intencore = False
+        if strmovieidlist != "":
+            strsqldelete = "DELETE FROM " + strsqlns + "TMDB_MOVIE_LIST WHERE ID_LIST = " + str(lnglistid) + " AND ID_MOVIE NOT IN (" + strmovieidlist + ") "
+            cursor2 = connectioncp.cursor()
+            cursor2.execute(strsqldelete)
+            connectioncp.commit()
+        if strserieidlist != "":
+            strsqldelete = "DELETE FROM " + strsqlns + "TMDB_SERIE_LIST WHERE ID_LIST = " + str(lnglistid) + " AND ID_SERIE NOT IN (" + strserieidlist + ") "
+            cursor2 = connectioncp.cursor()
+            cursor2.execute(strsqldelete)
+            connectioncp.commit()
+
+def f_tmdblistsetcreditscompleted(lnglistid):
+    global paris_tz
+    global connectioncp
+    
+    if lnglistid > 0:
+        cursor2 = connectioncp.cursor()
+        strsqltablename = "T_WC_TMDB_LIST"
+        strsqlupdatecondition = f"ID_LIST = {lnglistid}"
+        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
+        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
+        cursor2.execute(strsqlupdate)
+        connectioncp.commit()
+
+def f_tmdblisttosqleverything(lnglistid):
+    f_tmdblisttosql(lnglistid)
+    f_tmdblistsetcreditscompleted(lnglistid)
+
+def f_extract_imdb_id(text):
+    # Regular expression to find IMDb IDs
+    # 'tt' followed by 7 to 9 digits (commonly), but allows for more or fewer digits
+    pattern = r'tt\d{5,10}'
+    # Find the first match in the text
+    match = re.search(pattern, text)
+    # Return the IMDb ID if found, otherwise return None
+    return match.group(0) if match else ""
+
+def f_extract_movie_year(strplexmovieitemfile):
+    # Regular expression to find 4-digit numbers
+    strpattern = r'\b\d{4}\b'
+    # Find all matches in the text
+    arryears = re.findall(strpattern, strplexmovieitemfile)
+    lngfilemovieyear = 0
+    strfilemovietitle = ""
+    for stryear in arryears:
+        if stryear != "1080" and stryear != "2160":
+            # Skipping 1080 and 2160
+            lngpos = strplexmovieitemfile.find(stryear)
+            if lngpos > 0:
+                # Year is not the first character of the file name so year is not part of the title
+                lngfilemovieyear = int(stryear)
+                # lngmovieyear = lngfilemovieyear
+                # Set strfilemovietitle !!!!!!!!!!!!!!!!!!!!
+                strfilemovietitle = strplexmovieitemfile[:(lngpos-1)]
+                strfilemovietitle.strip()
+                break
+    # print(f"{strplexmovieitemfile} -> {lngfilemovieyear}, {strfilemovietitle}")
+    return lngfilemovieyear, strfilemovietitle
+
+def f_tmdbmoviesearch(strplexmovietitle, strfilemovietitle, lngplexmovieyear, lngfilemovieyear):
+    """
+    Search for a movie in The Movie Database (TMDb) API using title and year information.
+    
+    This function performs a comprehensive search strategy by trying different year combinations
+    to find the best match for a movie in the TMDb database.
+    
+    Parameters:
+    -----------
+    strplexmovietitle : str
+        The movie title as provided by Plex media server
+    strfilemovietitle : str
+        The movie title extracted from the filename (currently not used in search logic)
+    lngplexmovieyear : int
+        The release year as provided by Plex media server (used as fallback if file year is 0)
+    lngfilemovieyear : int
+        The release year extracted from the filename (takes priority over Plex year)
+    
+    Returns:
+    --------
+    tuple (int, int, str, str)
+        A tuple containing:
+        - lngmovieid (int): TMDb movie ID (0 if no match found)
+        - lngmovieyear (int): Release year from TMDb (0 if no match found)
+        - strmovietitle (str): Movie title from TMDb (empty string if no match found)
+        - strmovieoriginaltitle (str): Original movie title from TMDb (empty string if no match found)
+    
+    Search Strategy:
+    ---------------
+    1. Uses file year if available, otherwise falls back to Plex year
+    2. If no results found, tries searching with year-1 (previous year)
+    3. If still no results, tries searching with year+1 (next year)
+    4. If still no results, performs search without year constraint
+    5. Returns the first matching result from TMDb API
+    
+    Note:
+    -----
+    - Uses global variables for API configuration (strtmdbapidomainurl, headers, strlanguagecountry)
+    - Includes adult content in search results
+    - Prints debug information during execution
+    """
+    global strlanguagecountry
+    global strlanguage
+    global strtmdbapidomainurl
+    global headers
+    global strdatepattern
+    
+    print(f"f_tmdbmoviesearch('{strplexmovietitle}','{strfilemovietitle}',{lngplexmovieyear},{lngfilemovieyear})")
+    lngmovieyear = lngfilemovieyear
+    if lngfilemovieyear == 0:
+        # Year not found in title so we use the year provided by Plex
+        lngmovieyear = lngplexmovieyear
+    if lngmovieyear == 0:
+        # Movie year unknown
+        lngtotalresults = 0
+    else:
+        strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&primary_release_year=" + str(lngmovieyear) + "&page=1"
+        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
+        # print(strtmdbapifullurl)
+        response = requests.get(strtmdbapifullurl, headers=headers)
+        data = response.json()
+        results = data['results']
+        lngtotalresults = data['total_results']
+    if lngtotalresults == 0:
+        if lngmovieyear == 0:
+            # Movie year unknown
+            lngtotalresults = 0
+        else:
+            # No result so we will query in the previous year
+            lngmovieyear = lngmovieyear-1
+            # Process the line
+            strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&primary_release_year=" + str(lngmovieyear) + "&page=1"
+            strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
+            # print(strtmdbapifullurl)
+            response = requests.get(strtmdbapifullurl, headers=headers)
+            data = response.json()
+            results = data['results']
+            lngtotalresults = data['total_results']
+        if lngtotalresults == 0:
+            if lngmovieyear == 0:
+                # Movie year unknown
+                lngtotalresults = 0
+            else:
+                # No result so we will query in the next year
+                lngmovieyear = lngmovieyear+2
+                # Process the line
+                strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&primary_release_year=" + str(lngmovieyear) + "&page=1"
+                strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
+                # print(strtmdbapifullurl)
+                response = requests.get(strtmdbapifullurl, headers=headers)
+                data = response.json()
+                results = data['results']
+                lngtotalresults = data['total_results']
+            if lngtotalresults == 0:
+                # No result so we will query wthout the year parameter
+                lngmovieyear = 0
+                # Process the line
+                strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&page=1"
+                strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
+                # print(strtmdbapifullurl)
+                response = requests.get(strtmdbapifullurl, headers=headers)
+                data = response.json()
+                results = data['results']
+                lngtotalresults = data['total_results']
+    lngmovieid = 0
+    lngmovieyear = 0
+    strmovietitle = ""
+    strmovieoriginaltitle = ""
+    if lngtotalresults > 0:
+        # a single result for this movie in the TMDb API 
+        # or several results and we take the first one
+        for row in results:
+            lngmovieid = row['id']
+            strmovietitle = row['title']
+            strmovieoriginaltitle = row['original_title']
+            # print(f"-> Unique TMDbid = {lngmovieid}")
+            if 'release_date' in row:
+                # Release date is also found
+                if re.match(strdatepattern, row['release_date']):
+                    # And release date is valid
+                    strmoviereleasedate = row['release_date']
+                    # Extract release year
+                    lngmovieyear = int(strmoviereleasedate[:4])
+            # When we have a result, we exit the for loop
+            break
+    # This returns a tuple containing both lngmovieid, lngmovieyear and strmovietitle
+    print(f"-> {lngmovieid},{lngmovieyear},'{strmovietitle}','{strmovieoriginaltitle}'")
+    return lngmovieid, lngmovieyear, strmovietitle, strmovieoriginaltitle
+
+def f_stringtosql(strtext):
+    return "'" + strtext.replace("'","\\'") + "'"
+
+def f_getservervariable(strvarname,lnglang=0):
+    global strsqlns
+    global connectioncp
+    
+    cursor2 = connectioncp.cursor()
+    strresult = ""
+    strsqlselect = "SELECT VAR_VALUE FROM " + strsqlns + "SERVER_VARIABLE WHERE DELETED = 0 AND VAR_NAME = " + f_stringtosql(strvarname)
+    if lnglang > 0:
+        # Language is managed for server variables
+        strsqlselect += " AND ID_LANG = " + str(lnglang)
+    cursor2.execute(strsqlselect)
+    results = cursor2.fetchall()
+    for row in results:
+        strresult = row['VAR_VALUE']
+        break
+    return strresult
+    
+def f_setservervariable(strvarname,strvarvalue,strvardesc="",lnglang=0):
+    global strsqlns
+    
+    arrcouples = {}
+    arrcouples["VAR_NAME"] = strvarname
+    arrcouples["VAR_VALUE"] = strvarvalue
+    arrcouples["DESCRIPTION"] = strvarname
+    arrcouples["LONG_DESC"] = strvardesc
+    arrcouples["ID_LANG"] = lnglang
+    # print(arrcouples)
+    strsqltablename = strsqlns + "SERVER_VARIABLE"
+    strsqlupdatecondition = f"DELETED = 0 AND VAR_NAME = '{strvarname}'"
+    f_sqlupdatearray(strsqltablename,arrcouples,strsqlupdatecondition,1)
+
+def f_genrestranslatefr(strmoviegenres):
+    strmoviegenres = strmoviegenres.replace("|Action|","|Action|")
+    strmoviegenres = strmoviegenres.replace("|Adventure|","|Aventure|")
+    strmoviegenres = strmoviegenres.replace("|Animation|","|Animation|")
+    strmoviegenres = strmoviegenres.replace("|Comedy|","|Comédie|")
+    strmoviegenres = strmoviegenres.replace("|Crime|","|Crime|")
+    strmoviegenres = strmoviegenres.replace("|Documentary|","|Documentaire|")
+    strmoviegenres = strmoviegenres.replace("|Drama|","|Drame|")
+    strmoviegenres = strmoviegenres.replace("|Family|","|Familial|")
+    strmoviegenres = strmoviegenres.replace("|Fantasy|","|Fantastique|")
+    strmoviegenres = strmoviegenres.replace("|History|","|Histoire|")
+    strmoviegenres = strmoviegenres.replace("|Horror|","|Horreur|")
+    strmoviegenres = strmoviegenres.replace("|Music|","|Musique|")
+    strmoviegenres = strmoviegenres.replace("|Mystery|","|Mystère|")
+    strmoviegenres = strmoviegenres.replace("|Romance|","|Romance|")
+    strmoviegenres = strmoviegenres.replace("|Science Fiction|","|Science-Fiction|")
+    strmoviegenres = strmoviegenres.replace("|Thriller|","|Thriller|")
+    strmoviegenres = strmoviegenres.replace("|TV Movie|","|Téléfilm|")
+    strmoviegenres = strmoviegenres.replace("|War|","|Guerre|")
+    strmoviegenres = strmoviegenres.replace("|Western|","|Western|")
+    return strmoviegenres
+
 def f_tmdbseriesearch(strplexserietitle,strfileserietitle,lngplexserieyear,lngfileserieyear):
     global strlanguagecountry
     global strlanguage
@@ -2794,10 +2834,7 @@ def f_tmdbseriesearch(strplexserietitle,strfileserietitle,lngplexserieyear,lngfi
         strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiseriesearchurl
         # print(strtmdbapifullurl)
         response = requests.get(strtmdbapifullurl, headers=headers)
-        # strapiserie = response.text
-        # Parse the JSON data into a dictionary
         data = response.json()
-        # print(data)
         results = data['results']
         lngtotalresults = data['total_results']
     if lngtotalresults == 0:
@@ -2812,10 +2849,7 @@ def f_tmdbseriesearch(strplexserietitle,strfileserietitle,lngplexserieyear,lngfi
             strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiseriesearchurl
             # print(strtmdbapifullurl)
             response = requests.get(strtmdbapifullurl, headers=headers)
-            # strapiserie = response.text
-            # Parse the JSON data into a dictionary
             data = response.json()
-            # print(data)
             results = data['results']
             lngtotalresults = data['total_results']
         if lngtotalresults == 0:
@@ -2830,10 +2864,7 @@ def f_tmdbseriesearch(strplexserietitle,strfileserietitle,lngplexserieyear,lngfi
                 strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiseriesearchurl
                 # print(strtmdbapifullurl)
                 response = requests.get(strtmdbapifullurl, headers=headers)
-                # strapiserie = response.text
-                # Parse the JSON data into a dictionary
                 data = response.json()
-                # print(data)
                 results = data['results']
                 lngtotalresults = data['total_results']
             if lngtotalresults == 0:
@@ -2844,10 +2875,7 @@ def f_tmdbseriesearch(strplexserietitle,strfileserietitle,lngplexserieyear,lngfi
                 strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiseriesearchurl
                 # print(strtmdbapifullurl)
                 response = requests.get(strtmdbapifullurl, headers=headers)
-                # strapiserie = response.text
-                # Parse the JSON data into a dictionary
                 data = response.json()
-                # print(data)
                 results = data['results']
                 lngtotalresults = data['total_results']
     if lngtotalresults == 0:

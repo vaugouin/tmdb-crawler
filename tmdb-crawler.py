@@ -33,16 +33,15 @@ try:
             cursor3 = cp.connectioncp.cursor()
             strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
             cp.f_setservervariable("strtmdbcrawlerstartdatetime",strnow,"Date and time of the last start of the TMDb API crawler",0)
-            #cp.f_setservervariable("strtmdbcrawlercurrentsql","","Current SQL query in the TMDb API crawler",0)
-            # What id files should we process from the TMDb HTTP server? 
+            # Which id files should we process from the TMDb HTTP server? 
             arrtmdbidfilename = {41: 'movie', 42:'person', 43:'collection', 44:'tv_series', 45: 'keyword', 46: 'tv_network', 47: 'production_company'}
             #arrtmdbidfilename = {45: 'keyword'}
             #arrtmdbidfilename = {41: 'movie'}
             intdownloadok = True
             if strdattodayminus1 > strtmdbdatprev:
                 # This is a newer date, so we must import the TMDb ID files and import them in the MySQL database
+                # So if this script is ran several times a day, we will only import the TMDb ID files once
                 print("This is a newer date, so we must download the TMDb ID files and import them in the MySQL database")
-                # By default, we assume download will be ok 
                 inttruncate = False
                 intloaddatainfile = False
                 # First download the id file from the TMDb HTTP server and import them in the MySQL database
@@ -150,28 +149,17 @@ name = JSON_VALUE(@json_row, '$.name'); """
                         cp.f_setservervariable("strtmdbcrawlertmdbid"+strtmdbidfilename+"startdate",strnow,"Date and time of the download start of the TMDb "+strtmdbidfilename+" ID import file",0)
                         strtmdbidfileurl = f"https://files.tmdb.org/p/exports/{strtmdbidfilename}_ids_{strdattodayminus1us}.json.gz"
                         print(f"Download from {strtmdbidfileurl} to {strlocalgzfilename}")
-                        # Send a GET request to the URL with streaming enabled
                         response = requests.get(strtmdbidfileurl, stream=True)
-                        # Check if the request was successful
                         if response.status_code == 200:
-                            # Open a file in binary write mode
                             print(f"Extract {strlocalgzfilename} to {strlocaljsonfilename}")
                             with open(strlocalgzfilename, 'wb') as file:
-                                # Iterate over the response data in chunks
                                 for chunk in response.iter_content(chunk_size=8192):
-                                    # Write each chunk to the local file
                                     file.write(chunk)
-                                # file.write(response.content)
-                            # Extract gz to json
                             with gzip.open(strlocalgzfilename, 'rb') as f_in:
-                                # Open a new file in write-binary mode
                                 with open(strlocaljsonfilename, 'wb') as f_out:
-                                    # Copy the decompressed data to the new file
                                     shutil.copyfileobj(f_in, f_out)
-                            # Open and read the JSON file
                             print(f"Import {strlocaljsonfilename} to {strtmdbidsqltable}")
                             if intloaddatainfile:
-                                # Fast process using the LOAD DATA INFILE instruction
                                 strsqlbefore = f"""SET autocommit = 0; 
 SET unique_checks = 0; 
 SET foreign_key_checks = 0; 
@@ -192,8 +180,6 @@ SET autocommit = 1; """
                                 for statement in strsqlafter.strip().split(';'):
                                     if statement.strip():
                                         cursor.execute(statement)
-                                # Final commit if needed (though COMMIT is in strsqlafter)
-                                #connection.commit()
                             else:
                                 # Slow process without the LOAD DATA INFILE instruction
                                 with open(strlocaljsonfilename, 'r') as file:
@@ -222,12 +208,10 @@ SET autocommit = 1; """
                                             columns = ', '.join(record.keys())
                                             placeholders = ', '.join(['%s'] * len(record))
                                             strsql = f"INSERT INTO {strtmdbidsqltable} ({columns}) VALUES ({placeholders})"
-                                            # print(strsql)
                                             try:
                                                 cursor.execute(strsql, list(record.values()))
                                                 lngcount += 1
                                                 if lngcount % 100 == 0:
-                                                    # Commit the changes to the database
                                                     cp.connectioncp.commit()
                                                     cp.f_setservervariable("strtmdbcrawlertmdbid"+strtmdbidfilename+"count",str(lngcount),"Record count of the TMDb "+strtmdbidfilename+" ID import file",0)
                                             except pymysql.MySQLError as e:
@@ -281,6 +265,7 @@ SET autocommit = 1; """
                 strcurrentprocess = ""
                 strsql = ""
                 if intindex == 1:
+                    # New collections
                     strcurrentprocess = f"{intindex}: processing new collections from TMDb ID files"
                     strsql = ""
                     strsql += "SELECT id FROM T_WC_TMDB_COLLECTION_ID_IMPORT "
@@ -293,16 +278,14 @@ SET autocommit = 1; """
                     strsql = ""
                     strsql += "SELECT id FROM T_WC_TMDB_MOVIE_ID_IMPORT "
                     strsql += "WHERE id NOT IN (SELECT ID_MOVIE FROM T_WC_TMDB_MOVIE WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL) "
-                    # strsql += "AND id = 1154175 "
-                    # strsql += "AND popularity >= 10 "
                     strsql += "ORDER BY popularity DESC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 3:
+                    # New persons
                     strcurrentprocess = f"{intindex}: processing new person from TMDb ID files"
                     strsql = ""
                     strsql += "SELECT id FROM T_WC_TMDB_PERSON_ID_IMPORT "
                     strsql += "WHERE id NOT IN (SELECT ID_PERSON FROM T_WC_TMDB_PERSON WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL) "
-                    # strsql += "AND popularity >= 10 "
                     strsql += "ORDER BY popularity DESC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 4:
@@ -311,39 +294,13 @@ SET autocommit = 1; """
                     strsql = ""
                     strsql += "SELECT id FROM T_WC_TMDB_TV_SERIE_ID_IMPORT "
                     strsql += "WHERE id NOT IN (SELECT ID_SERIE FROM T_WC_TMDB_SERIE WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL) "
-                    #strsql += "AND id = 1399 "
-                    # strsql += "AND popularity >= 10 "
                     strsql += "ORDER BY popularity DESC "
                     strsql += "LIMIT 20000 "
-                elif intindex == 7:
-                    strcurrentprocess = f"{intindex}: processing uncomplete movie keywords"
-                    strsql = ""
-                    strsql += "SELECT T_WC_TMDB_MOVIE.ID_MOVIE AS id FROM T_WC_TMDB_MOVIE "
-                    strsql += "WHERE T_WC_TMDB_MOVIE.TIM_KEYWORDS_COMPLETED IS NULL "
-                    strsql += "ORDER BY T_WC_TMDB_MOVIE.POPULARITY DESC "
-                elif intindex == 8:
-                    strcurrentprocess = f"{intindex}: processing persons WHERE CRAWLER_VERSION <= 2"
-                    strsql = ""
-                    strsql += "SELECT ID_PERSON AS id FROM T_WC_TMDB_PERSON "
-                    strsql += "WHERE CRAWLER_VERSION <= 2 "
-                    strsql += "ORDER BY POPULARITY DESC "
-                elif intindex == 9:
-                    strcurrentprocess = f"{intindex}: processing new movies in French from TMDb ID files"
-                    strsql = ""
-                    strsql += "SELECT ID_MOVIE AS id FROM T_WC_TMDB_MOVIE "
-                    strsql += "WHERE ID_MOVIE NOT IN (SELECT ID_MOVIE FROM T_WC_TMDB_MOVIE_LANG WHERE LANG = 'fr' AND DELETED = 0) "
-                    strsql += "ORDER BY POPULARITY DESC "
-                elif intindex == 10:
-                    strcurrentprocess = f"{intindex}: processing new collections in French from TMDb ID files"
-                    strsql = ""
-                    strsql += "SELECT ID_COLLECTION AS id FROM T_WC_TMDB_COLLECTION "
-                    strsql += "WHERE ID_COLLECTION NOT IN (SELECT ID_COLLECTION FROM T_WC_TMDB_COLLECTION_LANG WHERE LANG = 'fr' AND DELETED = 0) "
                 elif intindex == 11:
                     # Refreshing movies
                     strcurrentprocess = f"{intindex}: refreshing movies"
                     strsql = ""
                     strsql += "SELECT T_WC_TMDB_MOVIE.ID_MOVIE AS id FROM T_WC_TMDB_MOVIE "
-                    #strsql += "WHERE T_WC_TMDB_MOVIE.TIM_CREDITS_COMPLETED < '" + strdatjminus14 + "' "
                     strsql += "WHERE T_WC_TMDB_MOVIE.TIM_CREDITS_COMPLETED < '" + strdatjminus14 + "' "
                     strsql += "ORDER BY T_WC_TMDB_MOVIE.TIM_CREDITS_COMPLETED "
                     strsql += "LIMIT 20000 "
@@ -420,7 +377,7 @@ SET autocommit = 1; """
                     strsql += "WHERE id NOT IN (SELECT id FROM T_WC_TMDB_KEYWORD_ID_IMPORT_LANG WHERE LANG = 'fr') "
                     strsql += "LIMIT 20000 "
                 elif intindex == 13:
-                    # Refresh lists
+                    # Refresh all lists
                     if strdattodayminus1 > strtmdbdatprev:
                         # This is a newer date, so we process only once a day
                         strcurrentprocess = f"{intindex}: refreshing lists"
@@ -476,6 +433,7 @@ SET autocommit = 1; """
                     strsql += "ORDER BY id ASC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 31:
+                    # Missings persons
                     strcurrentprocess = f"{intindex}: processing persons found in movie credits but with no person record"
                     strsql = ""
                     strsql += "SELECT DISTINCT ID_PERSON AS id "
@@ -483,6 +441,7 @@ SET autocommit = 1; """
                     strsql += "WHERE ID_PERSON NOT IN (SELECT ID_PERSON FROM T_WC_TMDB_PERSON) "
                     strsql += "ORDER BY ID_PERSON "
                 elif intindex == 32:
+                    # Missings movies
                     strcurrentprocess = f"{intindex}: processing movies found in movie credits but with no movie record"
                     strsql = ""
                     strsql += "SELECT DISTINCT ID_MOVIE AS id "
@@ -490,6 +449,7 @@ SET autocommit = 1; """
                     strsql += "WHERE ID_MOVIE NOT IN (SELECT ID_MOVIE FROM T_WC_TMDB_MOVIE) "
                     strsql += "ORDER BY ID_MOVIE "
                 elif intindex == 33:
+                    # Missings series
                     strcurrentprocess = f"{intindex}: processing series found in serie credits but with no serie record"
                     strsql = ""
                     strsql += "SELECT DISTINCT ID_SERIE AS id "
@@ -504,90 +464,46 @@ SET autocommit = 1; """
                     lngcount = 0
                     strdescvarname = strdesc.replace(" ","")
                     print("strdescvarname", strdescvarname)
-                    #cp.f_setservervariable("strtmdbcrawlercurrentsql",strsql,"Current SQL query in the TMDb API crawler",0)
                     cursor.execute(strsql)
                     lngrowcount = cursor.rowcount
                     print(f"{lngrowcount} lines")
-                    # Fetching all rows from the last executed statement
                     results = cursor.fetchall()
-                    # Iterating through the results and printing
                     for row in results:
                         # print("------------------------------------------")
                         lngid = row['id']
                         print(f"{strdesc} id: {lngid}")
                         if intindex == 1:
                             # New collections
-                            cp.f_tmdbcollectiontosql(lngid)
-                            cp.f_tmdbcollectionlangtosql(lngid,'fr')
-                            #cp.f_tmdbcollectioncreditstosql(lngid)
-                            cp.f_tmdbcollectionsetcreditscompleted(lngid)
-                            cp.f_tmdbcollectionimagestosql(lngid)
+                            cp.f_tmdbcollectiontosqleverything(lngid)
                         elif intindex == 2:
                             # New movies
-                            cp.f_tmdbmovietosql(lngid)
-                            cp.f_tmdbmovielangtosql(lngid,'fr')
-                            cp.f_tmdbmoviesetcreditscompleted(lngid)
-                            cp.f_tmdbmoviekeywordstosql(lngid)
-                            cp.f_tmdbmoviesetkeywordscompleted(lngid)
-                            cp.f_tmdbmovieimagestosql(lngid)
+                            cp.f_tmdbmovietosqleverything(lngid)
                         elif intindex == 3:
-                            cp.f_tmdbpersontosql(lngid)
-                            cp.f_tmdbpersonsetcreditscompleted(lngid)
-                            cp.f_tmdbpersonimagestosql(lngid)
+                            # New persons
+                            cp.f_tmdbpersontosqleverything(lngid)
                         elif intindex == 4:
                             # New series
-                            #print("New series")
-                            cp.f_tmdbserietosql(lngid)
-                            cp.f_tmdbserielangtosql(lngid,'fr')
-                            cp.f_tmdbseriesetcreditscompleted(lngid)
-                            cp.f_tmdbseriekeywordstosql(lngid)
-                            cp.f_tmdbseriesetkeywordscompleted(lngid)
-                            cp.f_tmdbserieimagestosql(lngid)
-                        elif intindex == 7:
-                            cp.f_tmdbmoviekeywordstosql(lngid)
-                            cp.f_tmdbmoviesetkeywordscompleted(lngid)
-                        elif intindex == 8:
-                            cp.f_tmdbpersontosql(lngid)
-                            cp.f_tmdbpersonsetcreditscompleted(lngid)
-                            cp.f_tmdbpersonimagestosql(lngid)
-                        elif intindex == 9:
-                            cp.f_tmdbmovielangtosql(lngid,'fr')
-                        elif intindex == 10:
-                            cp.f_tmdbcollectionlangtosql(lngid,'fr')
+                            cp.f_tmdbserietosqleverything(lngid)
                         elif intindex == 11:
                             # Refreshing movies
                             cp.f_tmdbmovietosqleverything(lngid)
                         elif intindex == 22:
                             # Refreshing movies
-                            cp.f_tmdbmovietosql(lngid)
-                            cp.f_tmdbmovielangtosql(lngid,'fr')
-                            cp.f_tmdbmoviesetcreditscompleted(lngid)
-                            cp.f_tmdbmoviekeywordstosql(lngid)
-                            cp.f_tmdbmoviesetkeywordscompleted(lngid)
+                            cp.f_tmdbmovietosqleverything(lngid)
                         elif intindex == 24:
                             # Refreshing persons
-                            cp.f_tmdbpersontosql(lngid)
-                            cp.f_tmdbpersonsetcreditscompleted(lngid)
-                            cp.f_tmdbpersonimagestosql(lngid)
+                            cp.f_tmdbpersontosqleverything(lngid)
                         elif intindex == 23:
                             cp.f_tmdbmovietosqleverything(lngid)
                         elif intindex == 25:
                             # Refreshing collections
-                            cp.f_tmdbcollectiontosql(lngid)
-                            cp.f_tmdbcollectionlangtosql(lngid,'fr')
-                            #cp.f_tmdbcollectioncreditstosql(lngid)
-                            cp.f_tmdbcollectionsetcreditscompleted(lngid)
-                            cp.f_tmdbcollectionimagestosql(lngid)
+                            cp.f_tmdbcollectiontosqleverything(lngid)
                         elif intindex == 26:
                             # Refreshing companies
-                            cp.f_tmdbcompanytosql(lngid)
-                            cp.f_tmdbcompanysetcreditscompleted(lngid)
-                            cp.f_tmdbcompanyimagestosql(lngid)
+                            cp.f_tmdbcompanytosqleverything(lngid)
                         elif intindex == 27:
                             # Refreshing networks
-                            cp.f_tmdbnetworktosql(lngid)
-                            cp.f_tmdbnetworksetcreditscompleted(lngid)
-                            cp.f_tmdbnetworkimagestosql(lngid)
+                            cp.f_tmdbnetworktosqleverything(lngid)
                         elif intindex == 12:
                             # New keywords
                             strname = row['name']
@@ -595,10 +511,8 @@ SET autocommit = 1; """
                             cursor3.execute(strsqlinsert)
                             cp.connectioncp.commit()
                         elif intindex == 13:
-                            # Refresh lists
-                            strname = row['NAME']
-                            cp.f_tmdblisttosql(lngid)
-                            cp.f_tmdblistsetcreditscompleted(lngid)
+                            # Refresh all lists
+                            cp.f_tmdblisttosqleverything(lngid)
                         elif intindex == 14:
                             # Deleted movies
                             if not cp.f_tmdbmovieexist(lngid):
@@ -616,35 +530,19 @@ SET autocommit = 1; """
                                 cp.f_tmdbseriedelete(lngid)
                         elif intindex == 17:
                             # New companies
-                            cp.f_tmdbcompanytosql(lngid)
-                            cp.f_tmdbcompanysetcreditscompleted(lngid)
-                            cp.f_tmdbcompanyimagestosql(lngid)
+                            cp.f_tmdbcompanytosqleverything(lngid)
                         elif intindex == 18:
                             # New networks
-                            cp.f_tmdbnetworktosql(lngid)
-                            cp.f_tmdbnetworksetcreditscompleted(lngid)
-                            cp.f_tmdbnetworkimagestosql(lngid)
+                            cp.f_tmdbnetworktosqleverything(lngid)
                         elif intindex == 31:
                             # Missing persons
-                            cp.f_tmdbpersontosql(lngid)
-                            cp.f_tmdbpersonsetcreditscompleted(lngid)
-                            cp.f_tmdbpersonimagestosql(lngid)
+                            cp.f_tmdbpersontosqleverything(lngid)
                         elif intindex == 32:
                             # Missing movies
-                            cp.f_tmdbmovietosql(lngid)
-                            cp.f_tmdbmovielangtosql(lngid,'fr')
-                            # When everything is loaded for the current movie, we set the TIM_CREDITS_COMPLETED value
-                            cp.f_tmdbmoviesetcreditscompleted(lngid)
-                            cp.f_tmdbmoviekeywordstosql(lngid)
-                            cp.f_tmdbmoviesetkeywordscompleted(lngid)
+                            cp.f_tmdbmovietosqleverything(lngid)
                         elif intindex == 33:
                             # Missing series
-                            cp.f_tmdbserietosql(lngid)
-                            cp.f_tmdbserielangtosql(lngid,'fr')
-                            cp.f_tmdbseriesetcreditscompleted(lngid)
-                            cp.f_tmdbseriekeywordstosql(lngid)
-                            cp.f_tmdbseriesetkeywordscompleted(lngid)
-                            cp.f_tmdbserieimagestosql(lngid)
+                            cp.f_tmdbserietosqleverything(lngid)
                         lngcount += 1
                         cp.f_setservervariable("strtmdbcrawlerprocess"+str(intindex)+strdescvarname+"count",str(lngcount),"Count of rows processed for process "+str(intindex)+" : "+strdesc+"",0)
                         strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
@@ -669,7 +567,7 @@ SET autocommit = 1; """
                     dattmdbchangesdate = datetime.strptime(strtmdbchangesdate, '%Y-%m-%d')
                     datprevday = dattmdbchangesdate - timedelta(days=2)
                     strtmdbchangesdate = datprevday.strftime('%Y-%m-%d')
-                strcurrentprocess = f"{inttmdbchanges}: processing " + str(inttmdbchanges) + " : " + strtmdbchanges + " changes from the TMDb API"
+                strcurrentprocess = f"{inttmdbchanges}: Processing {strtmdbchanges} changes from the TMDb API"
                 cp.f_setservervariable("strtmdbcrawlercurrentprocess",strcurrentprocess,"Current process in the TMDb API crawler",0)
                 strsqltable = ""
                 if inttmdbchanges == 51:
@@ -681,7 +579,7 @@ SET autocommit = 1; """
                     strsqltable = "T_WC_TMDB_PERSON"
                     strtmdbchangesapi = "person"
                 elif inttmdbchanges == 53:
-                    # TV changes
+                    # TV serie changes
                     strsqltable = "T_WC_TMDB_SERIE"
                     strtmdbchangesapi = "tv"
                 if strsqltable != "":
@@ -720,7 +618,6 @@ SET autocommit = 1; """
                                 for row in results:
                                     lngid = row['id']
                                     intadult = row['adult']
-                                    #if not intadult:
                                     if 1:
                                         # We can refresh this content
                                         if inttmdbchanges == 51:
@@ -731,7 +628,6 @@ SET autocommit = 1; """
                                             cursor3.execute(strsqlselect)
                                             lngrowcount = cursor3.rowcount
                                             if lngrowcount == 0:
-                                                # Not already retrieved so we have to update it from the TMDb API 
                                                 #print("Not already retrieved so we have to update it from the TMDb API")
                                                 print(f"{strtmdbchanges} changed id: {lngid}")
                                                 cp.f_tmdbmovietosqleverything(lngid)
@@ -749,12 +645,9 @@ SET autocommit = 1; """
                                             cursor3.execute(strsqlselect)
                                             lngrowcount = cursor3.rowcount
                                             if lngrowcount == 0:
-                                                # Not already retrieved so we have to update it from the TMDb API 
                                                 #print("Not already retrieved so we have to update it from the TMDb API")
                                                 print(f"{strtmdbchanges} changed id: {lngid}")
-                                                cp.f_tmdbpersontosql(lngid)
-                                                cp.f_tmdbpersonsetcreditscompleted(lngid)
-                                                cp.f_tmdbpersonimagestosql(lngid)
+                                                cp.f_tmdbpersontosqleverything(lngid)
                                                 lngcount += 1
                                             else:
                                                 results3 = cursor3.fetchall()
@@ -769,15 +662,9 @@ SET autocommit = 1; """
                                             cursor3.execute(strsqlselect)
                                             lngrowcount = cursor3.rowcount
                                             if lngrowcount == 0:
-                                                # Not already retrieved so we have to update it from the TMDb API 
                                                 #print("Not already retrieved so we have to update it from the TMDb API")
                                                 print(f"{strtmdbchanges} changed id: {lngid}")
-                                                cp.f_tmdbserietosql(lngid)
-                                                cp.f_tmdbserielangtosql(lngid,'fr')
-                                                cp.f_tmdbseriesetcreditscompleted(lngid)
-                                                cp.f_tmdbseriekeywordstosql(lngid)
-                                                cp.f_tmdbseriesetkeywordscompleted(lngid)
-                                                cp.f_tmdbserieimagestosql(lngid)
+                                                cp.f_tmdbserietosqleverything(lngid)
                                                 lngcount += 1
                                             else:
                                                 results3 = cursor3.fetchall()
