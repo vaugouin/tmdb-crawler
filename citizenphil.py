@@ -424,7 +424,7 @@ def f_tmdbpersontosql(lngpersonid):
                         strpersonhomepage = strpersonhomepage[:250]
                 
                 arrpersoncouples = {}
-                arrpersoncouples["API_URL"] = strtmdbapipersonurl
+                #arrpersoncouples["API_URL"] = strtmdbapipersonurl
                 # arrpersoncouples["API_RESULT"] = strapipersonfordb
                 if strpersonidimdb:
                     arrpersoncouples["ID_IMDB"] = strpersonidimdb
@@ -550,8 +550,8 @@ def f_tmdbpersontosql(lngpersonid):
                 strapipersonfordb = f_tmdbjsonremovekeys(strapipersonfordb,', "overview":',', "popularity":',', "popularity":')
                 strapipersonfordb = f_tmdbjsonremovekeys(strapipersonfordb,', "original_title":',', "popularity":',', "popularity":')
                 strapipersonfordb = f_tmdbjsonremovekeys(strapipersonfordb,', "title":',', "video":',', "video":')
-                arrpersoncouples["API_RESULT"] = strapipersonfordb
-                arrpersoncouples["CRAWLER_VERSION"] = 3
+                #arrpersoncouples["API_RESULT"] = strapipersonfordb
+                #arrpersoncouples["CRAWLER_VERSION"] = 3
                 
                 strsqltablename = "T_WC_TMDB_PERSON"
                 strsqlupdatecondition = f"ID_PERSON = {lngpersonid}"
@@ -926,7 +926,7 @@ def f_tmdbmovietosql(lngmovieid):
                 intismovie = 1
             
             arrmoviecouples = {}
-            arrmoviecouples["API_URL"] = strtmdbapimovieurl
+            #arrmoviecouples["API_URL"] = strtmdbapimovieurl
             # arrmoviecouples["API_RESULT"] = strapimoviefordb
             if strmovieidimdb:
                 arrmoviecouples["ID_IMDB"] = strmovieidimdb
@@ -1033,8 +1033,8 @@ def f_tmdbmovietosql(lngmovieid):
             # strapimoviefordb = f_tmdbjsonremovekeys(strapimoviefordb,', "original_name":',', "popularity":',', "popularity":')
             # strapimoviefordb = f_tmdbjsonremovekeys(strapimoviefordb,', "name":',', "popularity":',', "popularity":')
             # strapimoviefordb = f_tmdbjsonremovekeys(strapimoviefordb,', "original_name":',', "popularity":',', "popularity":')
-            arrmoviecouples["API_RESULT"] = strapimoviefordb
-            arrmoviecouples["CRAWLER_VERSION"] = 3
+            #arrmoviecouples["API_RESULT"] = strapimoviefordb
+            #arrmoviecouples["CRAWLER_VERSION"] = 3
             
             strsqltablename = "T_WC_TMDB_MOVIE"
             strsqlupdatecondition = f"ID_MOVIE = {lngmovieid}"
@@ -1125,7 +1125,7 @@ def f_tmdbmovielangtosql(lngmovieid, strlang):
                     strmovietitle = strmovietitle[:250]
             
             arrmoviecouples = {}
-            arrmoviecouples["API_URL"] = strtmdbapimovieurl
+            #arrmoviecouples["API_URL"] = strtmdbapimovieurl
             arrmoviecouples["OVERVIEW"] = strmovieoverview
             arrmoviecouples["ID_MOVIE"] = lngmovieid
             arrmoviecouples["LANG"] = strlang
@@ -1138,9 +1138,9 @@ def f_tmdbmovielangtosql(lngmovieid, strlang):
             if 'overview' in data:
                 encoded_overview = data['overview'].replace('\n', '\\n').replace('"', '\\"')
                 data['overview'] = encoded_overview
-            strapimoviefordb = json.dumps(data, ensure_ascii=False)
-            arrmoviecouples["API_RESULT"] = strapimoviefordb
-            arrmoviecouples["CRAWLER_VERSION"] = 3
+            #strapimoviefordb = json.dumps(data, ensure_ascii=False)
+            #arrmoviecouples["API_RESULT"] = strapimoviefordb
+            #arrmoviecouples["CRAWLER_VERSION"] = 3
             
             strsqltablename = "T_WC_TMDB_MOVIE_LANG"
             strsqlupdatecondition = f"ID_MOVIE = {lngmovieid} AND LANG = '{strlang}'"
@@ -1668,7 +1668,7 @@ def f_tmdbserietosql(lngserieid):
             
             # Prepare main record data
             arrseriecouples = {}
-            arrseriecouples["API_URL"] = strtmdbapiserieurl
+            #arrseriecouples["API_URL"] = strtmdbapiserieurl
             arrseriecouples["ID_SERIE"] = lngserieid
             
             if strserieidimdb:
@@ -1816,9 +1816,9 @@ def f_tmdbserietosql(lngserieid):
                 encoded_overview = data['overview'].replace('\n', '\\n').replace('"', '\\"')
                 data['overview'] = encoded_overview
             
-            strapiseriefordb = json.dumps(data, ensure_ascii=False)
-            arrseriecouples["API_RESULT"] = strapiseriefordb
-            arrseriecouples["CRAWLER_VERSION"] = 3
+            #strapiseriefordb = json.dumps(data, ensure_ascii=False)
+            #arrseriecouples["API_RESULT"] = strapiseriefordb
+            #arrseriecouples["CRAWLER_VERSION"] = 3
             
             # Update main serie record
             strsqltablename = "T_WC_TMDB_SERIE"
@@ -1921,7 +1921,7 @@ def f_tmdbserielangtosql(lngserieid, strlang):
                     strserietitle = strserietitle[:250]
             
             arrseriecouples = {}
-            arrseriecouples["API_URL"] = strtmdbapiserieurl
+            #arrseriecouples["API_URL"] = strtmdbapiserieurl
             arrseriecouples["OVERVIEW"] = strserieoverview
             arrseriecouples["ID_SERIE"] = lngserieid
             arrseriecouples["LANG"] = strlang
@@ -1934,9 +1934,9 @@ def f_tmdbserielangtosql(lngserieid, strlang):
             if 'overview' in data:
                 encoded_overview = data['overview'].replace('\n', '\\n').replace('"', '\\"')
                 data['overview'] = encoded_overview
-            strapiseriefordb = json.dumps(data, ensure_ascii=False)
-            arrseriecouples["API_RESULT"] = strapiseriefordb
-            arrseriecouples["CRAWLER_VERSION"] = 3
+            #strapiseriefordb = json.dumps(data, ensure_ascii=False)
+            #arrseriecouples["API_RESULT"] = strapiseriefordb
+            #arrseriecouples["CRAWLER_VERSION"] = 3
             
             strsqltablename = "T_WC_TMDB_SERIE_LANG"
             strsqlupdatecondition = f"ID_SERIE = {lngserieid} AND LANG = '{strlang}'"
@@ -2167,7 +2167,7 @@ def f_tmdbcollectiontosql(lngcollectionid):
         response = requests.get(strtmdbapifullurl, headers=headers)
         data = response.json()
         
-        strapicollectionfordb = json.dumps(data, ensure_ascii=False)
+        #strapicollectionfordb = json.dumps(data, ensure_ascii=False)
         
         # print(response.json)
         lngcollectionstatuscode = 0
@@ -2195,9 +2195,9 @@ def f_tmdbcollectiontosql(lngcollectionid):
             
             arrcollectioncouples = {}
             arrcollectioncouples["ID_COLLECTION"] = lngcollectionid
-            arrcollectioncouples["API_URL"] = strtmdbapicollectionurl
-            arrcollectioncouples["CRAWLER_VERSION"] = 1
-            arrcollectioncouples["API_RESULT"] = strapicollectionfordb
+            #arrcollectioncouples["API_URL"] = strtmdbapicollectionurl
+            #arrcollectioncouples["CRAWLER_VERSION"] = 1
+            #arrcollectioncouples["API_RESULT"] = strapicollectionfordb
             arrcollectioncouples["OVERVIEW"] = strcollectionoverview
             arrcollectioncouples["POSTER_PATH"] = strcollectionposterpath
             if strcollectionname != "":
@@ -2248,7 +2248,7 @@ def f_tmdbcollectionlangtosql(lngcollectionid, strlang):
                     strcollectionname = strcollectionname[:250]
             
             arrcollectioncouples = {}
-            arrcollectioncouples["API_URL"] = strtmdbapicollectionurl
+            #arrcollectioncouples["API_URL"] = strtmdbapicollectionurl
             arrcollectioncouples["OVERVIEW"] = strcollectionoverview
             arrcollectioncouples["ID_COLLECTION"] = lngcollectionid
             arrcollectioncouples["LANG"] = strlang
@@ -2260,9 +2260,9 @@ def f_tmdbcollectionlangtosql(lngcollectionid, strlang):
             if 'overview' in data:
                 encoded_overview = data['overview'].replace('\n', '\\n').replace('"', '\\"')
                 data['overview'] = encoded_overview
-            strapicollectionfordb = json.dumps(data, ensure_ascii=False)
-            arrcollectioncouples["API_RESULT"] = strapicollectionfordb
-            arrcollectioncouples["CRAWLER_VERSION"] = 3
+            #strapicollectionfordb = json.dumps(data, ensure_ascii=False)
+            #arrcollectioncouples["API_RESULT"] = strapicollectionfordb
+            #arrcollectioncouples["CRAWLER_VERSION"] = 3
             
             strsqltablename = "T_WC_TMDB_COLLECTION_LANG"
             strsqlupdatecondition = f"ID_COLLECTION = {lngcollectionid} AND LANG = '{strlang}'"
@@ -2304,7 +2304,7 @@ def f_tmdbcompanytosql(lngcompanyid):
         response = requests.get(strtmdbapifullurl, headers=headers)
         data = response.json()
         
-        strapicompanyfordb = json.dumps(data, ensure_ascii=False)
+        #strapicompanyfordb = json.dumps(data, ensure_ascii=False)
         lngcompanystatuscode = 0
         if 'status_code' in data:
             lngcompanystatuscode = data['status_code']
@@ -2348,9 +2348,9 @@ def f_tmdbcompanytosql(lngcompanyid):
             
             arrcompanycouples = {}
             arrcompanycouples["ID_COMPANY"] = lngcompanyid
-            arrcompanycouples["API_URL"] = strtmdbapicompanyurl
-            arrcompanycouples["CRAWLER_VERSION"] = 1
-            arrcompanycouples["API_RESULT"] = strapicompanyfordb
+            #arrcompanycouples["API_URL"] = strtmdbapicompanyurl
+            #arrcompanycouples["CRAWLER_VERSION"] = 1
+            #arrcompanycouples["API_RESULT"] = strapicompanyfordb
             if strcompanydescription != "":
                 arrcompanycouples["DESCRIPTION"] = strcompanydescription
             if strcompanylogopath != "":
@@ -2406,7 +2406,7 @@ def f_tmdbnetworktosql(lngnetworkid):
         response = requests.get(strtmdbapifullurl, headers=headers)
         data = response.json()
         
-        strapinetworkfordb = json.dumps(data, ensure_ascii=False)
+        #strapinetworkfordb = json.dumps(data, ensure_ascii=False)
         lngnetworkstatuscode = 0
         if 'status_code' in data:
             lngnetworkstatuscode = data['status_code']
@@ -2419,6 +2419,9 @@ def f_tmdbnetworktosql(lngnetworkid):
             strnetworkname = ""
             if 'name' in data:
                 strnetworkname = data['name']
+            strnetworkheadquarters = ""
+            if 'headquarters' in data:
+                strnetworkheadquarters = data['headquarters']
             strnetworkhomepage = ""
             if 'homepage' in data:
                 strnetworkhomepage = data['homepage']
@@ -2436,9 +2439,9 @@ def f_tmdbnetworktosql(lngnetworkid):
             
             arrnetworkcouples = {}
             arrnetworkcouples["ID_NETWORK"] = lngnetworkid
-            arrnetworkcouples["API_URL"] = strtmdbapinetworkurl
-            arrnetworkcouples["CRAWLER_VERSION"] = 1
-            arrnetworkcouples["API_RESULT"] = strapinetworkfordb
+            #arrnetworkcouples["API_URL"] = strtmdbapinetworkurl
+            #arrnetworkcouples["CRAWLER_VERSION"] = 1
+            #arrnetworkcouples["API_RESULT"] = strapinetworkfordb
             if strnetworklogopath != "":
                 arrnetworkcouples["LOGO_PATH"] = strnetworklogopath
             if strnetworkname != "":
@@ -2447,6 +2450,8 @@ def f_tmdbnetworktosql(lngnetworkid):
                 arrnetworkcouples["HOMEPAGE_URL"] = strnetworkhomepage
             if strnetworkorigincountry != "":
                 arrnetworkcouples["ORIGIN_COUNTRY"] = strnetworkorigincountry
+            if strnetworkheadquarters != "":
+                arrnetworkcouples["HEADQUARTERS"] = strnetworkheadquarters
             
             strsqltablename = "T_WC_TMDB_NETWORK"
             strsqlupdatecondition = f"ID_NETWORK = {lngnetworkid}"
@@ -2474,6 +2479,40 @@ def f_tmdbnetworktosqleverything(lngnetworkid):
     f_tmdbnetworksetcreditscompleted(lngnetworkid)
     f_tmdbnetworkimagestosql(lngnetworkid)
 
+def f_tmdbkeywordtosql(lngkeywordid, strkeywordname):
+    global strtmdbapidomainurl
+    global headers
+    global strlanguagecountry
+    global strlanguage
+    
+    if lngkeywordid > 0:
+        arrkeywordcouples = {}
+        arrkeywordcouples["ID_KEYWORD"] = lngkeywordid
+        if strkeywordname != "":
+            arrkeywordcouples["NAME"] = strkeywordname
+        
+        strsqltablename = "T_WC_TMDB_KEYWORD"
+        strsqlupdatecondition = f"ID_KEYWORD = {lngkeywordid}"
+        f_sqlupdatearray(strsqltablename,arrkeywordcouples,strsqlupdatecondition,1)
+
+def f_tmdbkeywordsetcreditscompleted(lngkeywordid):
+    global paris_tz
+    global connectioncp
+    
+    if lngkeywordid > 0:
+        cursor2 = connectioncp.cursor()
+        strsqltablename = "T_WC_TMDB_KEYWORD"
+        strsqlupdatecondition = f"ID_KEYWORD = {lngkeywordid}"
+        strtimcreditscompleted = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+        strsqlupdatesetclause = f"TIM_CREDITS_COMPLETED = '{strtimcreditscompleted}', TIM_UPDATED = '{strtimcreditscompleted}'"
+        strsqlupdate = f"UPDATE {strsqltablename} SET {strsqlupdatesetclause} WHERE {strsqlupdatecondition};"
+        cursor2.execute(strsqlupdate)
+        connectioncp.commit()
+
+def f_tmdbkeywordtosqleverything(lngkeywordid, strkeywordname):
+    f_tmdbkeywordtosql(lngkeywordid, strkeywordname)
+    f_tmdbkeywordsetcreditscompleted(lngkeywordid)
+
 # https://developer.themoviedb.org/reference/list-details
 
 def f_tmdblisttosql(lnglistid):
@@ -2495,7 +2534,7 @@ def f_tmdblisttosql(lnglistid):
             # print(strtmdbapifullurl)
             response = requests.get(strtmdbapifullurl, headers=headers)
             data = response.json()
-            strapilistfordb = json.dumps(data, ensure_ascii=False)
+            #strapilistfordb = json.dumps(data, ensure_ascii=False)
             lngliststatuscode = 0
             if 'status_code' in data:
                 lngliststatuscode = data['status_code']
@@ -2522,9 +2561,9 @@ def f_tmdblisttosql(lnglistid):
                     
                     arrlistcouples = {}
                     arrlistcouples["ID_LIST"] = lnglistid
-                    arrlistcouples["API_URL"] = strtmdbapilisturl
-                    arrlistcouples["CRAWLER_VERSION"] = 1
-                    arrlistcouples["API_RESULT"] = strapilistfordb
+                    #arrlistcouples["API_URL"] = strtmdbapilisturl
+                    #arrlistcouples["CRAWLER_VERSION"] = 1
+                    #arrlistcouples["API_RESULT"] = strapilistfordb
                     arrlistcouples["DESCRIPTION"] = strlistdesc
                     arrlistcouples["POSTER_PATH"] = strlistposterpath
                     if strlistname != "":
@@ -2599,168 +2638,10 @@ def f_tmdblisttosqleverything(lnglistid):
     f_tmdblisttosql(lnglistid)
     f_tmdblistsetcreditscompleted(lnglistid)
 
-def f_extract_imdb_id(text):
-    # Regular expression to find IMDb IDs
-    # 'tt' followed by 7 to 9 digits (commonly), but allows for more or fewer digits
-    pattern = r'tt\d{5,10}'
-    # Find the first match in the text
-    match = re.search(pattern, text)
-    # Return the IMDb ID if found, otherwise return None
-    return match.group(0) if match else ""
-
-def f_extract_movie_year(strplexmovieitemfile):
-    # Regular expression to find 4-digit numbers
-    strpattern = r'\b\d{4}\b'
-    # Find all matches in the text
-    arryears = re.findall(strpattern, strplexmovieitemfile)
-    lngfilemovieyear = 0
-    strfilemovietitle = ""
-    for stryear in arryears:
-        if stryear != "1080" and stryear != "2160":
-            # Skipping 1080 and 2160
-            lngpos = strplexmovieitemfile.find(stryear)
-            if lngpos > 0:
-                # Year is not the first character of the file name so year is not part of the title
-                lngfilemovieyear = int(stryear)
-                # lngmovieyear = lngfilemovieyear
-                # Set strfilemovietitle !!!!!!!!!!!!!!!!!!!!
-                strfilemovietitle = strplexmovieitemfile[:(lngpos-1)]
-                strfilemovietitle.strip()
-                break
-    # print(f"{strplexmovieitemfile} -> {lngfilemovieyear}, {strfilemovietitle}")
-    return lngfilemovieyear, strfilemovietitle
-
-def f_tmdbmoviesearch(strplexmovietitle, strfilemovietitle, lngplexmovieyear, lngfilemovieyear):
-    """
-    Search for a movie in The Movie Database (TMDb) API using title and year information.
-    
-    This function performs a comprehensive search strategy by trying different year combinations
-    to find the best match for a movie in the TMDb database.
-    
-    Parameters:
-    -----------
-    strplexmovietitle : str
-        The movie title as provided by Plex media server
-    strfilemovietitle : str
-        The movie title extracted from the filename (currently not used in search logic)
-    lngplexmovieyear : int
-        The release year as provided by Plex media server (used as fallback if file year is 0)
-    lngfilemovieyear : int
-        The release year extracted from the filename (takes priority over Plex year)
-    
-    Returns:
-    --------
-    tuple (int, int, str, str)
-        A tuple containing:
-        - lngmovieid (int): TMDb movie ID (0 if no match found)
-        - lngmovieyear (int): Release year from TMDb (0 if no match found)
-        - strmovietitle (str): Movie title from TMDb (empty string if no match found)
-        - strmovieoriginaltitle (str): Original movie title from TMDb (empty string if no match found)
-    
-    Search Strategy:
-    ---------------
-    1. Uses file year if available, otherwise falls back to Plex year
-    2. If no results found, tries searching with year-1 (previous year)
-    3. If still no results, tries searching with year+1 (next year)
-    4. If still no results, performs search without year constraint
-    5. Returns the first matching result from TMDb API
-    
-    Note:
-    -----
-    - Uses global variables for API configuration (strtmdbapidomainurl, headers, strlanguagecountry)
-    - Includes adult content in search results
-    - Prints debug information during execution
-    """
-    global strlanguagecountry
-    global strlanguage
-    global strtmdbapidomainurl
-    global headers
-    global strdatepattern
-    
-    print(f"f_tmdbmoviesearch('{strplexmovietitle}','{strfilemovietitle}',{lngplexmovieyear},{lngfilemovieyear})")
-    lngmovieyear = lngfilemovieyear
-    if lngfilemovieyear == 0:
-        # Year not found in title so we use the year provided by Plex
-        lngmovieyear = lngplexmovieyear
-    if lngmovieyear == 0:
-        # Movie year unknown
-        lngtotalresults = 0
-    else:
-        strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&primary_release_year=" + str(lngmovieyear) + "&page=1"
-        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
-        # print(strtmdbapifullurl)
-        response = requests.get(strtmdbapifullurl, headers=headers)
-        data = response.json()
-        results = data['results']
-        lngtotalresults = data['total_results']
-    if lngtotalresults == 0:
-        if lngmovieyear == 0:
-            # Movie year unknown
-            lngtotalresults = 0
-        else:
-            # No result so we will query in the previous year
-            lngmovieyear = lngmovieyear-1
-            # Process the line
-            strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&primary_release_year=" + str(lngmovieyear) + "&page=1"
-            strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
-            # print(strtmdbapifullurl)
-            response = requests.get(strtmdbapifullurl, headers=headers)
-            data = response.json()
-            results = data['results']
-            lngtotalresults = data['total_results']
-        if lngtotalresults == 0:
-            if lngmovieyear == 0:
-                # Movie year unknown
-                lngtotalresults = 0
-            else:
-                # No result so we will query in the next year
-                lngmovieyear = lngmovieyear+2
-                # Process the line
-                strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&primary_release_year=" + str(lngmovieyear) + "&page=1"
-                strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
-                # print(strtmdbapifullurl)
-                response = requests.get(strtmdbapifullurl, headers=headers)
-                data = response.json()
-                results = data['results']
-                lngtotalresults = data['total_results']
-            if lngtotalresults == 0:
-                # No result so we will query wthout the year parameter
-                lngmovieyear = 0
-                # Process the line
-                strtmdbapimoviesearchurl = "3/search/movie?query=" + quote(strplexmovietitle) + "&include_adult=true&language=" + strlanguagecountry + "&page=1"
-                strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesearchurl
-                # print(strtmdbapifullurl)
-                response = requests.get(strtmdbapifullurl, headers=headers)
-                data = response.json()
-                results = data['results']
-                lngtotalresults = data['total_results']
-    lngmovieid = 0
-    lngmovieyear = 0
-    strmovietitle = ""
-    strmovieoriginaltitle = ""
-    if lngtotalresults > 0:
-        # a single result for this movie in the TMDb API 
-        # or several results and we take the first one
-        for row in results:
-            lngmovieid = row['id']
-            strmovietitle = row['title']
-            strmovieoriginaltitle = row['original_title']
-            # print(f"-> Unique TMDbid = {lngmovieid}")
-            if 'release_date' in row:
-                # Release date is also found
-                if re.match(strdatepattern, row['release_date']):
-                    # And release date is valid
-                    strmoviereleasedate = row['release_date']
-                    # Extract release year
-                    lngmovieyear = int(strmoviereleasedate[:4])
-            # When we have a result, we exit the for loop
-            break
-    # This returns a tuple containing both lngmovieid, lngmovieyear and strmovietitle
-    print(f"-> {lngmovieid},{lngmovieyear},'{strmovietitle}','{strmovieoriginaltitle}'")
-    return lngmovieid, lngmovieyear, strmovietitle, strmovieoriginaltitle
-
 def f_stringtosql(strtext):
     return "'" + strtext.replace("'","\\'") + "'"
+
+# Server variables functions
 
 def f_getservervariable(strvarname,lnglang=0):
     global strsqlns
@@ -2815,92 +2696,25 @@ def f_genrestranslatefr(strmoviegenres):
     strmoviegenres = strmoviegenres.replace("|Western|","|Western|")
     return strmoviegenres
 
-def f_tmdbseriesearch(strplexserietitle,strfileserietitle,lngplexserieyear,lngfileserieyear):
-    global strlanguagecountry
-    global strlanguage
-    global strtmdbapidomainurl
-    global headers
-    global strdatepattern
+def convert_seconds_to_duration(seconds):
+    """Convert seconds to a readable format: days, hours, minutes, seconds"""
+    if seconds < 0:
+        return "Invalid duration (negative seconds)"
     
-    lngserieyear = lngfileserieyear
-    if lngfileserieyear == 0:
-        # Year not found in title so we use the year provided by Plex
-        lngserieyear = lngplexserieyear
-    if lngserieyear == 0:
-        # Serie year unknown
-        lngtotalresults = 0
-    else:
-        strtmdbapiseriesearchurl = "3/search/serie?query=" + quote(strplexserietitle) + "&include_adult=false&language=" + strlanguagecountry + "&primary_release_year=" + str(lngserieyear) + "&page=1"
-        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiseriesearchurl
-        # print(strtmdbapifullurl)
-        response = requests.get(strtmdbapifullurl, headers=headers)
-        data = response.json()
-        results = data['results']
-        lngtotalresults = data['total_results']
-    if lngtotalresults == 0:
-        if lngserieyear == 0:
-            # Serie year unknown
-            lngtotalresults = 0
-        else:
-            # No result so we will query in the previous year
-            lngserieyear = lngserieyear-1
-            # Process the line
-            strtmdbapiseriesearchurl = "3/search/serie?query=" + quote(strplexserietitle) + "&include_adult=false&language=" + strlanguagecountry + "&primary_release_year=" + str(lngserieyear) + "&page=1"
-            strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiseriesearchurl
-            # print(strtmdbapifullurl)
-            response = requests.get(strtmdbapifullurl, headers=headers)
-            data = response.json()
-            results = data['results']
-            lngtotalresults = data['total_results']
-        if lngtotalresults == 0:
-            if lngserieyear == 0:
-                # Serie year unknown
-                lngtotalresults = 0
-            else:
-                # No result so we will query in the next year
-                lngserieyear = lngserieyear+2
-                # Process the line
-                strtmdbapiseriesearchurl = "3/search/serie?query=" + quote(strplexserietitle) + "&include_adult=false&language=" + strlanguagecountry + "&primary_release_year=" + str(lngserieyear) + "&page=1"
-                strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiseriesearchurl
-                # print(strtmdbapifullurl)
-                response = requests.get(strtmdbapifullurl, headers=headers)
-                data = response.json()
-                results = data['results']
-                lngtotalresults = data['total_results']
-            if lngtotalresults == 0:
-                # No result so we will query wthout the year parameter
-                lngserieyear = 0
-                # Process the line
-                strtmdbapiseriesearchurl = "3/search/serie?query=" + quote(strplexserietitle) + "&include_adult=false&language=" + strlanguagecountry + "&page=1"
-                strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiseriesearchurl
-                # print(strtmdbapifullurl)
-                response = requests.get(strtmdbapifullurl, headers=headers)
-                data = response.json()
-                results = data['results']
-                lngtotalresults = data['total_results']
-    if lngtotalresults == 0:
-        # print("No result from the TMDb API")
-        lngserieid = 0
-        lngserieyear = 0
-        strserietitle = ""
-        strserieoriginaltitle = ""
-    else:
-        # a single result for this serie in the TMDb API 
-        # or several results and we take the first one
-        for row in results:
-            lngserieid = row['id']
-            strserietitle = row['title']
-            strserieoriginaltitle = row['original_title']
-            # print(f"-> Unique TMDbid = {lngserieid}")
-            if 'release_date' in row:
-                # Release date is also found
-                if re.match(strdatepattern, row['release_date']):
-                    # And release date is valid
-                    strseriefirstairdate = row['release_date']
-                    # Extract release year
-                    lngserieyear = int(strseriefirstairdate[:4])
-            # When we have a result, we exit the for loop
-            break
-    # This returns a tuple containing both lngserieid, lngserieyear and strserietitle
-    return lngserieid, lngserieyear, strserietitle, strserieoriginaltitle
+    days = seconds // 86400  # 86400 seconds in a day
+    hours = (seconds % 86400) // 3600  # 3600 seconds in an hour
+    minutes = (seconds % 3600) // 60
+    remaining_seconds = seconds % 60
+    
+    parts = []
+    if days > 0:
+        parts.append(f"{days} day{'s' if days != 1 else ''}")
+    if hours > 0:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes > 0:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    if remaining_seconds > 0:
+        parts.append(f"{remaining_seconds} second{'s' if remaining_seconds != 1 else ''}")
+    
+    return ", ".join(parts)
 

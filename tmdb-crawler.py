@@ -21,18 +21,25 @@ strimdbdatprev = cp.f_getservervariable("strtmdbcrawlerimdbidimportdate",0)
 print(f"strtmdbdatprev={strtmdbdatprev}")
 print(f"strimdbdatprev={strimdbdatprev}")
 
-strprocessesexecutedprevious = cp.f_getservervariable("strtmdbcrawlerprocessesexecuted",0)
-strprocessesexecuteddesc = "List of processes executed in the TMDb API crawler"
-cp.f_setservervariable("strtmdbcrawlerprocessesexecutedprevious",strprocessesexecutedprevious,strprocessesexecuteddesc + " (previous execution)",0)
-strprocessesexecuted = ""
-cp.f_setservervariable("strtmdbcrawlerprocessesexecuted",strprocessesexecuted,strprocessesexecuteddesc,0)
 
 try:
     with cp.connectioncp:
         with cp.connectioncp.cursor() as cursor:
             cursor3 = cp.connectioncp.cursor()
+            # Start timing the script execution
+            start_time = time.time()
             strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
             cp.f_setservervariable("strtmdbcrawlerstartdatetime",strnow,"Date and time of the last start of the TMDb API crawler",0)
+            strprocessesexecutedprevious = cp.f_getservervariable("strtmdbcrawlerprocessesexecuted",0)
+            strprocessesexecuteddesc = "List of processes executed in the TMDb API crawler"
+            cp.f_setservervariable("strtmdbcrawlerprocessesexecutedprevious",strprocessesexecutedprevious,strprocessesexecuteddesc + " (previous execution)",0)
+            strprocessesexecuted = ""
+            cp.f_setservervariable("strtmdbcrawlerprocessesexecuted",strprocessesexecuted,strprocessesexecuteddesc,0)
+            strtotalruntimedesc = "Total runtime of the TMDb crawler"
+            strtotalruntimeprevious = cp.f_getservervariable("strtmdbcrawlertotalruntime",0)
+            cp.f_setservervariable("strtmdbcrawlertotalruntimeprevious",strtotalruntimeprevious,strtotalruntimedesc + " (previous execution)",0)
+            strtotalruntime = ""
+            cp.f_setservervariable("strtmdbcrawlertotalruntime",strtotalruntime,strtotalruntimedesc,0)
             # Which id files should we process from the TMDb HTTP server? 
             arrtmdbidfilename = {41: 'movie', 42:'person', 43:'collection', 44:'tv_series', 45: 'keyword', 46: 'tv_network', 47: 'production_company'}
             #arrtmdbidfilename = {45: 'keyword'}
@@ -235,7 +242,7 @@ SET autocommit = 1; """
             intdownloadok = False
             
             # Now handling new contents from TMdB
-            arrprocessscope = {17: 'new companies', 18: 'new networks', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 22: 'refreshing movies', 24: 'refreshing persons', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
+            arrprocessscope = {17: 'new companies', 18: 'new networks', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 22: 'refreshing movies', 28: 'refreshing series', 24: 'refreshing persons', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
             #arrprocessscope = {22: 'refreshing movies'}
             #arrprocessscope = {4: 'new series', 16: 'deleted series', 33: 'missing series'}
             #arrprocessscope = {17: 'new companies', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 13:'refresh lists', 23: 'wikidata movie id fix', 31: 'missing persons', 32: 'missing movies'}
@@ -246,7 +253,9 @@ SET autocommit = 1; """
             #arrprocessscope = {18: 'new networks'}
             #arrprocessscope = {25: 'refreshing collections'}
             #arrprocessscope = {27: 'refreshing networks'}
+            #arrprocessscope = {28: 'refreshing series'}
             #arrprocessscope = {26: 'refreshing companies'}
+            #arrprocessscope = {12: 'new keywords'}
             #arrprocessscope = {0: 'nothing'}
             for intindex, strdesc in arrprocessscope.items():
                 # Get the current date and time
@@ -296,20 +305,24 @@ SET autocommit = 1; """
                     strsql += "WHERE id NOT IN (SELECT ID_SERIE FROM T_WC_TMDB_SERIE WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL) "
                     strsql += "ORDER BY popularity DESC "
                     strsql += "LIMIT 20000 "
-                elif intindex == 11:
-                    # Refreshing movies
-                    strcurrentprocess = f"{intindex}: refreshing movies"
+                elif intindex == 12:
+                    # New keywords
+                    strcurrentprocess = f"{intindex}: processing new keywords from TMDb ID files"
                     strsql = ""
-                    strsql += "SELECT T_WC_TMDB_MOVIE.ID_MOVIE AS id FROM T_WC_TMDB_MOVIE "
-                    strsql += "WHERE T_WC_TMDB_MOVIE.TIM_CREDITS_COMPLETED < '" + strdatjminus14 + "' "
-                    strsql += "ORDER BY T_WC_TMDB_MOVIE.TIM_CREDITS_COMPLETED "
-                    strsql += "LIMIT 20000 "
+                    strsql += "SELECT id, name FROM T_WC_TMDB_KEYWORD_ID_IMPORT "
+                    strsql += "WHERE id NOT IN (SELECT ID_KEYWORD FROM T_WC_TMDB_KEYWORD WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL) "
+                    strsql += "ORDER BY id ASC "
+                    #strsql += "LIMIT 20000 "
                 elif intindex == 22:
                     # Refreshing movies
                     strcurrentprocess = f"{intindex}: refreshing movies"
+                    # Compute the date 30 days ago
+                    delta30 = timedelta(days=30)
+                    datjminus30 = datnow - delta30
+                    strdatjminus30 = datjminus30.strftime("%Y-%m-%d")
                     strsql = ""
                     strsql += "SELECT T_WC_TMDB_MOVIE.ID_MOVIE AS id FROM T_WC_TMDB_MOVIE "
-                    strsql += "WHERE T_WC_TMDB_MOVIE.TIM_UPDATED < '2025-07-17' "
+                    strsql += "WHERE T_WC_TMDB_MOVIE.TIM_UPDATED < '" + strdatjminus30 + "' "
                     #strsql += "AND (T_WC_TMDB_MOVIE.ID_MOVIE IN ( "
                     #strsql += "SELECT ID_MOVIE FROM T_WC_TMDB_MOVIE_LIST WHERE ID_LIST IN ( "
                     #strsql += "SELECT ID_LIST FROM T_WC_TMDB_LIST WHERE DELETED = 0 AND USE_FOR_TAGGING = 1 "
@@ -319,12 +332,28 @@ SET autocommit = 1; """
                     #strsql += ") "
                     strsql += "ORDER BY T_WC_TMDB_MOVIE.TIM_UPDATED ASC "
                     strsql += "LIMIT 20000 "
+                elif intindex == 28:
+                    # Refreshing series
+                    strcurrentprocess = f"{intindex}: refreshing series"
+                    # Compute the date 30 days ago
+                    delta30 = timedelta(days=30)
+                    datjminus30 = datnow - delta30
+                    strdatjminus30 = datjminus30.strftime("%Y-%m-%d")
+                    strsql = ""
+                    strsql += "SELECT T_WC_TMDB_SERIE.ID_SERIE AS id FROM T_WC_TMDB_SERIE "
+                    strsql += "WHERE T_WC_TMDB_SERIE.TIM_UPDATED < '" + strdatjminus30 + "' "
+                    strsql += "ORDER BY T_WC_TMDB_SERIE.TIM_UPDATED ASC "
+                    strsql += "LIMIT 20000 "
                 elif intindex == 24:
                     # Refreshing persons
                     strcurrentprocess = f"{intindex}: refreshing persons"
+                    # Compute the date 30 days ago
+                    delta30 = timedelta(days=30)
+                    datjminus30 = datnow - delta30
+                    strdatjminus30 = datjminus30.strftime("%Y-%m-%d")
                     strsql = ""
                     strsql += "SELECT T_WC_TMDB_PERSON.ID_PERSON AS id FROM T_WC_TMDB_PERSON "
-                    strsql += "WHERE T_WC_TMDB_PERSON.TIM_UPDATED < '2025-07-18' "
+                    strsql += "WHERE T_WC_TMDB_PERSON.TIM_UPDATED < '" + strdatjminus30 + "' "
                     strsql += "ORDER BY T_WC_TMDB_PERSON.TIM_UPDATED ASC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 23:
@@ -350,7 +379,7 @@ SET autocommit = 1; """
                     strcurrentprocess = f"{intindex}: refreshing collections"
                     strsql = ""
                     strsql += "SELECT T_WC_TMDB_COLLECTION.ID_COLLECTION AS id FROM T_WC_TMDB_COLLECTION "
-                    strsql += "WHERE T_WC_TMDB_COLLECTION.TIM_UPDATED < '2025-07-18' "
+                    strsql += "WHERE T_WC_TMDB_COLLECTION.TIM_UPDATED < '" + strdatjminus30 + "' "
                     strsql += "ORDER BY T_WC_TMDB_COLLECTION.TIM_UPDATED ASC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 26:
@@ -358,7 +387,7 @@ SET autocommit = 1; """
                     strcurrentprocess = f"{intindex}: refreshing companies"
                     strsql = ""
                     strsql += "SELECT T_WC_TMDB_COMPANY.ID_COMPANY AS id FROM T_WC_TMDB_COMPANY "
-                    strsql += "WHERE T_WC_TMDB_COMPANY.TIM_UPDATED < '2025-07-18' "
+                    strsql += "WHERE T_WC_TMDB_COMPANY.TIM_UPDATED < '" + strdatjminus30 + "' "
                     strsql += "ORDER BY T_WC_TMDB_COMPANY.TIM_UPDATED ASC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 27:
@@ -366,15 +395,8 @@ SET autocommit = 1; """
                     strcurrentprocess = f"{intindex}: refreshing networks"
                     strsql = ""
                     strsql += "SELECT T_WC_TMDB_NETWORK.ID_NETWORK AS id FROM T_WC_TMDB_NETWORK "
-                    strsql += "WHERE T_WC_TMDB_NETWORK.TIM_UPDATED < '2025-07-18' "
+                    strsql += "WHERE T_WC_TMDB_NETWORK.TIM_UPDATED < '" + strdatjminus30 + "' "
                     strsql += "ORDER BY T_WC_TMDB_NETWORK.TIM_UPDATED ASC "
-                    strsql += "LIMIT 20000 "
-                elif intindex == 12:
-                    # New keywords
-                    strcurrentprocess = f"{intindex}: processing new keywords in French from TMDb ID files"
-                    strsql = ""
-                    strsql += "SELECT id, name FROM T_WC_TMDB_KEYWORD_ID_IMPORT "
-                    strsql += "WHERE id NOT IN (SELECT id FROM T_WC_TMDB_KEYWORD_ID_IMPORT_LANG WHERE LANG = 'fr') "
                     strsql += "LIMIT 20000 "
                 elif intindex == 13:
                     # Refresh all lists
@@ -484,12 +506,12 @@ SET autocommit = 1; """
                         elif intindex == 4:
                             # New series
                             cp.f_tmdbserietosqleverything(lngid)
-                        elif intindex == 11:
-                            # Refreshing movies
-                            cp.f_tmdbmovietosqleverything(lngid)
                         elif intindex == 22:
                             # Refreshing movies
                             cp.f_tmdbmovietosqleverything(lngid)
+                        elif intindex == 28:
+                            # Refreshing series
+                            cp.f_tmdbserietosqleverything(lngid)
                         elif intindex == 24:
                             # Refreshing persons
                             cp.f_tmdbpersontosqleverything(lngid)
@@ -506,10 +528,8 @@ SET autocommit = 1; """
                             cp.f_tmdbnetworktosqleverything(lngid)
                         elif intindex == 12:
                             # New keywords
-                            strname = row['name']
-                            strsqlinsert = "INSERT INTO T_WC_TMDB_KEYWORD_ID_IMPORT_LANG (id, name, LANG) VALUES (" + str(lngid) + ", '" + strname.replace("\\", "\\\\").replace("'", "\\'") + "', 'fr') "
-                            cursor3.execute(strsqlinsert)
-                            cp.connectioncp.commit()
+                            strkeywordname = row['name']
+                            cp.f_tmdbkeywordtosqleverything(lngid, strkeywordname)
                         elif intindex == 13:
                             # Refresh all lists
                             cp.f_tmdblisttosqleverything(lngid)
@@ -693,6 +713,13 @@ SET autocommit = 1; """
             cp.f_setservervariable("strtmdbcrawlercurrentprocess",strcurrentprocess,"Current process in the TMDb API crawler",0)
             strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
             cp.f_setservervariable("strtmdbcrawlerenddatetime",strnow,"Date and time of the TMDb API crawler ending",0)
+            # Calculate total runtime and convert to readable format
+            end_time = time.time()
+            strtotalruntime = int(end_time - start_time)  # Total runtime in seconds
+            cp.f_setservervariable("strtmdbcrawlertotalruntimeseconds",str(strtotalruntime),strtotalruntimedesc,0)
+            readable_duration = cp.convert_seconds_to_duration(strtotalruntime)
+            cp.f_setservervariable("strtmdbcrawlertotalruntime",readable_duration,strtotalruntimedesc,0)
+            print(f"Total runtime: {strtotalruntime} seconds ({readable_duration})")
     print("Process completed")
 except pymysql.MySQLError as e:
     print(f"❌ MySQL Error: {e}")
