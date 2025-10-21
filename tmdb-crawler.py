@@ -21,7 +21,6 @@ strimdbdatprev = cp.f_getservervariable("strtmdbcrawlerimdbidimportdate",0)
 print(f"strtmdbdatprev={strtmdbdatprev}")
 print(f"strimdbdatprev={strimdbdatprev}")
 
-
 try:
     with cp.connectioncp:
         with cp.connectioncp.cursor() as cursor:
@@ -52,6 +51,7 @@ try:
                 inttruncate = False
                 intloaddatainfile = False
                 # First download the id file from the TMDb HTTP server and import them in the MySQL database
+                # (Loop #1)
                 for inttmdbidfilename,strtmdbidfilename in arrtmdbidfilename.items():
                     strlocalgzfilename = '/shared/' + strtmdbidfilename + '.json.gz'
                     strlocaljsonfilename = '/shared/' + strtmdbidfilename + '.json'
@@ -241,7 +241,7 @@ SET autocommit = 1; """
                 cp.f_setservervariable("strtmdbcrawlertmdbidimportdate",strdattodayminus1,"Date of the last download of the TMDb ID import files",0)
             intdownloadok = False
             
-            # Now handling new contents from TMdB
+            # Now handling new contents from TMdB (Loop #2)
             arrprocessscope = {17: 'new companies', 18: 'new networks', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 22: 'refreshing movies', 28: 'refreshing series', 24: 'refreshing persons', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
             #arrprocessscope = {22: 'refreshing movies'}
             #arrprocessscope = {4: 'new series', 16: 'deleted series', 33: 'missing series'}
@@ -570,7 +570,7 @@ SET autocommit = 1; """
                 print("------------------------------------------")
             strsql = ""
             
-            # Now updating changed contents
+            # Now updating changed contents (Loop #3)
             strnowdate = datetime.now(cp.paris_tz).strftime("%Y-%m-%d")
             arrtmdbchanges = {51: 'movie', 52: 'person', 53: 'serie'}
             #arrtmdbchanges = {53: 'serie'}
@@ -708,7 +708,210 @@ SET autocommit = 1; """
                             strnowdate = datetime.now(cp.paris_tz).strftime("%Y-%m-%d")
                             if strtmdbchangesdate > strnowdate:
                                 intencoredate = False
-            
+
+            # Configuration for missing images processing (Loop #4)
+            # Each entity type is configured with:
+            # - content_table: main content table name
+            # - image_table: corresponding image table name
+            # - id_field: primary key field name in both tables
+            # - image_fields: list of tuples (field_name, image_type) for each image path to check
+            # - language: language code for the images (e.g., 'en') or 'from_table' to read from LANG column
+            # - lang_field: (optional) name of the language column in content_table when language='from_table'
+            missing_images_config = {
+                61: {
+                    'desc': 'movie images',
+                    'content_table': 'T_WC_TMDB_MOVIE',
+                    'image_table': 'T_WC_TMDB_MOVIE_IMAGE',
+                    'id_field': 'ID_MOVIE',
+                    'image_fields': [
+                        ('POSTER_PATH', 'poster'),
+                        ('BACKDROP_PATH', 'backdrop')
+                    ],
+                    'language': 'en'
+                },
+                62: {
+                    'desc': 'person images',
+                    'content_table': 'T_WC_TMDB_PERSON',
+                    'image_table': 'T_WC_TMDB_PERSON_IMAGE',
+                    'id_field': 'ID_PERSON',
+                    'image_fields': [
+                        ('PROFILE_PATH', 'profile')
+                    ],
+                    'language': 'en'
+                },
+                63: {
+                    'desc': 'serie images',
+                    'content_table': 'T_WC_TMDB_SERIE',
+                    'image_table': 'T_WC_TMDB_SERIE_IMAGE',
+                    'id_field': 'ID_SERIE',
+                    'image_fields': [
+                        ('POSTER_PATH', 'poster'),
+                        ('BACKDROP_PATH', 'backdrop')
+                    ],
+                    'language': 'en'
+                },
+                64: {
+                    'desc': 'collection images',
+                    'content_table': 'T_WC_TMDB_COLLECTION',
+                    'image_table': 'T_WC_TMDB_COLLECTION_IMAGE',
+                    'id_field': 'ID_COLLECTION',
+                    'image_fields': [
+                        ('POSTER_PATH', 'poster'),
+                        ('BACKDROP_PATH', 'backdrop')
+                    ],
+                    'language': 'en'
+                },
+                65: {
+                    'desc': 'company images',
+                    'content_table': 'T_WC_TMDB_COMPANY',
+                    'image_table': 'T_WC_TMDB_COMPANY_IMAGE',
+                    'id_field': 'ID_COMPANY',
+                    'image_fields': [
+                        ('LOGO_PATH', 'logo')
+                    ],
+                    'language': 'en'
+                },
+                66: {
+                    'desc': 'network images',
+                    'content_table': 'T_WC_TMDB_NETWORK',
+                    'image_table': 'T_WC_TMDB_NETWORK_IMAGE',
+                    'id_field': 'ID_NETWORK',
+                    'image_fields': [
+                        ('LOGO_PATH', 'logo')
+                    ],
+                    'language': 'en'
+                },
+                67: {
+                    'desc': 'movie lang images',
+                    'content_table': 'T_WC_TMDB_MOVIE_LANG',
+                    'image_table': 'T_WC_TMDB_MOVIE_IMAGE',
+                    'id_field': 'ID_MOVIE',
+                    'image_fields': [
+                        ('POSTER_PATH', 'poster'),
+                        ('BACKDROP_PATH', 'backdrop')
+                    ],
+                    'language': 'from_table',  # Read from LANG column
+                    'lang_field': 'LANG'
+                },
+                68: {
+                    'desc': 'serie lang images',
+                    'content_table': 'T_WC_TMDB_SERIE_LANG',
+                    'image_table': 'T_WC_TMDB_SERIE_IMAGE',
+                    'id_field': 'ID_SERIE',
+                    'image_fields': [
+                        ('POSTER_PATH', 'poster'),
+                        ('BACKDROP_PATH', 'backdrop')
+                    ],
+                    'language': 'from_table',  # Read from LANG column
+                    'lang_field': 'LANG'
+                },
+                69: {
+                    'desc': 'collection lang images',
+                    'content_table': 'T_WC_TMDB_COLLECTION_LANG',
+                    'image_table': 'T_WC_TMDB_COLLECTION_IMAGE',
+                    'id_field': 'ID_COLLECTION',
+                    'image_fields': [
+                        ('POSTER_PATH', 'poster'),
+                        ('BACKDROP_PATH', 'backdrop')
+                    ],
+                    'language': 'from_table',  # Read from LANG column
+                    'lang_field': 'LANG'
+                }
+            }
+
+            # Helper function to process missing images for any entity type
+            def process_missing_images(config, cursor, intimageindex):
+                """
+                Process missing images for a given entity type.
+
+                Args:
+                    config: Configuration dict with content_table, image_table, id_field, image_fields, language
+                    cursor: Database cursor
+                    intimageindex: Process index for logging
+
+                Returns:
+                    tuple: (lngcount, lnginsertcount) - number of records processed and images inserted
+                """
+                strlang = config['language']
+                content_table = config['content_table']
+                image_table = config['image_table']
+                id_field = config['id_field']
+                image_fields = config['image_fields']
+
+                # Check if language should be read from table
+                use_lang_from_table = (strlang == 'from_table')
+                lang_field = config.get('lang_field', 'LANG') if use_lang_from_table else None
+
+                # Build SELECT query with all image path fields
+                field_list = [id_field] + [field_name for field_name, _ in image_fields]
+                if use_lang_from_table:
+                    field_list.append(lang_field)
+                strsql = f"SELECT {', '.join(field_list)} FROM {content_table} WHERE DELETED = 0 ORDER BY {id_field}"
+
+                cursor.execute(strsql)
+                results = cursor.fetchall()
+
+                lngcount = 0
+                lnginsertcount = 0
+
+                for row in results:
+                    lngid = row[id_field]
+
+                    # Get language for this row (either from config or from table)
+                    if use_lang_from_table:
+                        row_lang = row.get(lang_field, 'en')  # Default to 'en' if LANG is null
+                    else:
+                        row_lang = strlang
+
+                    # Process each image field for this record
+                    for field_name, image_type in image_fields:
+                        image_path = row[field_name]
+
+                        if image_path and image_path != '':
+                            # Check if image already exists in image table
+                            strsqlcheck = f"SELECT ID_ROW FROM {image_table} WHERE {id_field} = %s AND IMAGE_PATH = %s AND DELETED = 0"
+                            cursor.execute(strsqlcheck, (lngid, image_path))
+
+                            if cursor.rowcount == 0:
+                                # Insert missing image
+                                strsqlinsert = f"""INSERT INTO {image_table}
+                                    ({id_field}, IMAGE_PATH, TYPE_IMAGE, DELETED, DISPLAY_ORDER, DAT_CREAT, TIM_UPDATED, LANG)
+                                    VALUES (%s, %s, %s, 0, 0, NOW(), NOW(), %s)"""
+                                cursor.execute(strsqlinsert, (lngid, image_path, image_type, row_lang))
+                                lnginsertcount += 1
+                                print(f"Inserted missing {image_type} for {content_table.lower().replace('t_wc_tmdb_', '')} {lngid}: {image_path} (lang: {row_lang})")
+
+                    lngcount += 1
+                    if lngcount % 100 == 0:
+                        cp.connectioncp.commit()
+                        print(f"Processed {lngcount} records, inserted {lnginsertcount} missing images")
+
+                cp.connectioncp.commit()
+                return lngcount, lnginsertcount
+
+            # Now handling missing images (Loop #4)
+            arrmissingimages = {61: 'movie images', 62: 'person images', 63: 'serie images', 64: 'collection images', 65: 'company images', 66: 'network images', 67: 'movie lang images', 68: 'serie lang images', 69: 'collection lang images'}
+            #arrmissingimages = {61: 'movie images'}
+            #arrmissingimages = {0: 'nothing'}
+            for intimageindex, strimagedesc in arrmissingimages.items():
+                strprocessesexecuted += str(intimageindex) + ", "
+                cp.f_setservervariable("strtmdbcrawlerprocessesexecuted",strprocessesexecuted,strprocessesexecuteddesc,0)
+                strcurrentprocess = f"{intimageindex}: processing missing {strimagedesc}"
+                print(strcurrentprocess)
+                cp.f_setservervariable("strtmdbcrawlercurrentprocess",strcurrentprocess,"Current process in the TMDb API crawler",0)
+
+                # Use the helper function with configuration if this index is configured
+                if intimageindex in missing_images_config:
+                    config = missing_images_config[intimageindex]
+                    lngcount, lnginsertcount = process_missing_images(config, cursor, intimageindex)
+                else:
+                    lngcount = 0
+                    lnginsertcount = 0
+
+                print(f"Completed {strimagedesc}: processed {lngcount} records, inserted {lnginsertcount} missing images")
+                cp.f_setservervariable("strtmdbcrawlerprocess"+str(intimageindex)+strimagedesc.replace(' ','')+"count",str(lnginsertcount),"Count of inserted rows for process "+str(intimageindex)+" : "+strimagedesc+"",0)
+                print("------------------------------------------")
+
             strcurrentprocess = ""
             cp.f_setservervariable("strtmdbcrawlercurrentprocess",strcurrentprocess,"Current process in the TMDb API crawler",0)
             strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
