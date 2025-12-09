@@ -2,3 +2,4 @@ pymysql
 numpy
 requests
 pytz
+python-dotenv>=1.0.0
