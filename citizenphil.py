@@ -119,9 +119,11 @@ def f_sqlupdatearray(strsqltablename, arrpersoncouples, strsqlupdatecondition, i
         arrvalues = []
         for key,value in arrpersoncouples.items():
             # print(f"{key} = {value}")
-            if type(value) is int: # Handle Integers
+            if isinstance(value, bool):
+                arrvalues.append(f"{key} = {1 if value else 0}")
+            elif isinstance(value, int): # Handle Integers
                 arrvalues.append("{key} = {value}".format(key=key, value=value))
-            elif type(value) is float: # Handle floats
+            elif isinstance(value, float): # Handle floats
                 arrvalues.append("{key} = {value}".format(key=key, value=value))
             elif value is None: # Handle NULL
                 arrvalues.append("{key} = NULL".format(key=key))
@@ -429,9 +431,10 @@ def f_tmdbcontentvideosstosql(lngcontentid, strcontenttype, strsqlmastertable, s
                 "QUALITY_TEXT": str(video.get('size', 0)) + 'p',
                 "OFFICIAL": video.get('official', False)
             }
-            
+            #print(arrvideodata)
             # Update or insert into database
             strsqlupdatecondition = f"{strkeyfieldname} = {lngcontentid} AND LANG = '{strlang}' AND ID_CREDIT = '{video_id}'"
+            #print(strsqlupdatecondition)
             f_sqlupdatearray(strsqltablename, arrvideodata, strsqlupdatecondition, 1)
     
     # Clean up obsolete videos
