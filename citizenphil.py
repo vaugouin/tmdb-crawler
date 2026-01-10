@@ -542,6 +542,10 @@ def f_tmdbpersontosql(lngpersonid):
                 strpersonname = data['name']
                 strpersonplaceofbirth = str(data['place_of_birth'])
                 strpersonplaceofbirth = strpersonplaceofbirth.strip()
+                if strpersonplaceofbirth: 
+                    if len(strpersonplaceofbirth) > 200:
+                        # If place of birth is too long, we chop it
+                        strpersonplaceofbirth = strpersonplaceofbirth[:200]
                 dblpersonpopularity = data['popularity']
                 strpersonknownfordepartment = data['known_for_department']
                 boopersonadult = data['adult']
@@ -2007,13 +2011,14 @@ def f_tmdbserietosql(lngserieid):
                 processed_creator_ids = set()
                 
                 # Check which creators were already processed during credit processing
-                for intcredittype, strseriecreditcredittype in arrcredittype.items():
-                    if strseriecreditcredittype in data['credits']:
-                        for onecontent in data['credits'][strseriecreditcredittype]:
-                            lngpersonid = onecontent['id']
-                            for creator in arrcreatedby:
-                                if creator['id'] == lngpersonid:
-                                    processed_creator_ids.add(lngpersonid)
+                if 'credits' in data:
+                    for intcredittype, strseriecreditcredittype in arrcredittype.items():
+                        if strseriecreditcredittype in data['credits']:
+                            for onecontent in data['credits'][strseriecreditcredittype]:
+                                lngpersonid = onecontent['id']
+                                for creator in arrcreatedby:
+                                    if creator['id'] == lngpersonid:
+                                        processed_creator_ids.add(lngpersonid)
                 
                 # Add any creators that weren't processed
                 for creator in arrcreatedby:
