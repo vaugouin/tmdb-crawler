@@ -3,6 +3,7 @@ import requests
 import pymysql.cursors
 import json
 import citizenphil as cp
+import tmdb_functions as tf
 from datetime import datetime, timedelta
 import gzip
 import shutil
@@ -377,6 +378,10 @@ SET autocommit = 1; """
                 elif intindex == 25:
                     # Refreshing collections
                     strcurrentprocess = f"{intindex}: refreshing collections"
+                    # Compute the date 30 days ago
+                    delta30 = timedelta(days=30)
+                    datjminus30 = datnow - delta30
+                    strdatjminus30 = datjminus30.strftime("%Y-%m-%d")
                     strsql = ""
                     strsql += "SELECT T_WC_TMDB_COLLECTION.ID_COLLECTION AS id FROM T_WC_TMDB_COLLECTION "
                     strsql += "WHERE T_WC_TMDB_COLLECTION.TIM_UPDATED < '" + strdatjminus30 + "' "
@@ -385,6 +390,10 @@ SET autocommit = 1; """
                 elif intindex == 26:
                     # Refreshing companies
                     strcurrentprocess = f"{intindex}: refreshing companies"
+                    # Compute the date 30 days ago
+                    delta30 = timedelta(days=30)
+                    datjminus30 = datnow - delta30
+                    strdatjminus30 = datjminus30.strftime("%Y-%m-%d")
                     strsql = ""
                     strsql += "SELECT T_WC_TMDB_COMPANY.ID_COMPANY AS id FROM T_WC_TMDB_COMPANY "
                     strsql += "WHERE T_WC_TMDB_COMPANY.TIM_UPDATED < '" + strdatjminus30 + "' "
@@ -393,6 +402,10 @@ SET autocommit = 1; """
                 elif intindex == 27:
                     # Refreshing networks
                     strcurrentprocess = f"{intindex}: refreshing networks"
+                    # Compute the date 30 days ago
+                    delta30 = timedelta(days=30)
+                    datjminus30 = datnow - delta30
+                    strdatjminus30 = datjminus30.strftime("%Y-%m-%d")
                     strsql = ""
                     strsql += "SELECT T_WC_TMDB_NETWORK.ID_NETWORK AS id FROM T_WC_TMDB_NETWORK "
                     strsql += "WHERE T_WC_TMDB_NETWORK.TIM_UPDATED < '" + strdatjminus30 + "' "
@@ -496,73 +509,73 @@ SET autocommit = 1; """
                         print(f"{strdesc} id: {lngid}")
                         if intindex == 1:
                             # New collections
-                            cp.f_tmdbcollectiontosqleverything(lngid)
+                            tf.f_tmdbcollectiontosqleverything(lngid)
                         elif intindex == 2:
                             # New movies
-                            cp.f_tmdbmovietosqleverything(lngid)
+                            tf.f_tmdbmovietosqleverything(lngid)
                         elif intindex == 3:
                             # New persons
-                            cp.f_tmdbpersontosqleverything(lngid)
+                            tf.f_tmdbpersontosqleverything(lngid)
                         elif intindex == 4:
                             # New series
-                            cp.f_tmdbserietosqleverything(lngid)
+                            tf.f_tmdbserietosqleverything(lngid)
                         elif intindex == 22:
                             # Refreshing movies
-                            cp.f_tmdbmovietosqleverything(lngid)
+                            tf.f_tmdbmovietosqleverything(lngid)
                         elif intindex == 28:
                             # Refreshing series
-                            cp.f_tmdbserietosqleverything(lngid)
+                            tf.f_tmdbserietosqleverything(lngid)
                         elif intindex == 24:
                             # Refreshing persons
-                            cp.f_tmdbpersontosqleverything(lngid)
+                            tf.f_tmdbpersontosqleverything(lngid)
                         elif intindex == 23:
-                            cp.f_tmdbmovietosqleverything(lngid)
+                            tf.f_tmdbmovietosqleverything(lngid)
                         elif intindex == 25:
                             # Refreshing collections
-                            cp.f_tmdbcollectiontosqleverything(lngid)
+                            tf.f_tmdbcollectiontosqleverything(lngid)
                         elif intindex == 26:
                             # Refreshing companies
-                            cp.f_tmdbcompanytosqleverything(lngid)
+                            tf.f_tmdbcompanytosqleverything(lngid)
                         elif intindex == 27:
                             # Refreshing networks
-                            cp.f_tmdbnetworktosqleverything(lngid)
+                            tf.f_tmdbnetworktosqleverything(lngid)
                         elif intindex == 12:
                             # New keywords
                             strkeywordname = row['name']
-                            cp.f_tmdbkeywordtosqleverything(lngid, strkeywordname)
+                            tf.f_tmdbkeywordtosqleverything(lngid, strkeywordname)
                         elif intindex == 13:
                             # Refresh all lists
-                            cp.f_tmdblisttosqleverything(lngid)
+                            tf.f_tmdblisttosqleverything(lngid)
                         elif intindex == 14:
                             # Deleted movies
-                            if not cp.f_tmdbmovieexist(lngid):
+                            if not tf.f_tmdbmovieexist(lngid):
                                 # Delete this movie in the MySQL database because it does not exist anymore in the TMDb database
-                                cp.f_tmdbmoviedelete(lngid)
+                                tf.f_tmdbmoviedelete(lngid)
                         elif intindex == 15:
                             # Deleted persons
-                            if not cp.f_tmdbpersonexist(lngid):
+                            if not tf.f_tmdbpersonexist(lngid):
                                 # Delete this person in the MySQL database because it does not exist anymore in the TMDb database
-                                cp.f_tmdbpersondelete(lngid)
+                                tf.f_tmdbpersondelete(lngid)
                         elif intindex == 16:
                             # Deleted series
-                            if not cp.f_tmdbserieexist(lngid):
+                            if not tf.f_tmdbserieexist(lngid):
                                 # Delete this serie in the MySQL database because it does not exist anymore in the TMDb database
-                                cp.f_tmdbseriedelete(lngid)
+                                tf.f_tmdbseriedelete(lngid)
                         elif intindex == 17:
                             # New companies
-                            cp.f_tmdbcompanytosqleverything(lngid)
+                            tf.f_tmdbcompanytosqleverything(lngid)
                         elif intindex == 18:
                             # New networks
-                            cp.f_tmdbnetworktosqleverything(lngid)
+                            tf.f_tmdbnetworktosqleverything(lngid)
                         elif intindex == 31:
                             # Missing persons
-                            cp.f_tmdbpersontosqleverything(lngid)
+                            tf.f_tmdbpersontosqleverything(lngid)
                         elif intindex == 32:
                             # Missing movies
-                            cp.f_tmdbmovietosqleverything(lngid)
+                            tf.f_tmdbmovietosqleverything(lngid)
                         elif intindex == 33:
                             # Missing series
-                            cp.f_tmdbserietosqleverything(lngid)
+                            tf.f_tmdbserietosqleverything(lngid)
                         lngcount += 1
                         cp.f_setservervariable("strtmdbcrawlerprocess"+str(intindex)+strdescvarname+"count",str(lngcount),"Count of rows processed for process "+str(intindex)+" : "+strdesc+"",0)
                         strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
@@ -650,7 +663,7 @@ SET autocommit = 1; """
                                             if lngrowcount == 0:
                                                 #print("Not already retrieved so we have to update it from the TMDb API")
                                                 print(f"{strtmdbchanges} changed id: {lngid}")
-                                                cp.f_tmdbmovietosqleverything(lngid)
+                                                tf.f_tmdbmovietosqleverything(lngid)
                                                 lngcount += 1
                                             else:
                                                 results3 = cursor3.fetchall()
@@ -667,7 +680,7 @@ SET autocommit = 1; """
                                             if lngrowcount == 0:
                                                 #print("Not already retrieved so we have to update it from the TMDb API")
                                                 print(f"{strtmdbchanges} changed id: {lngid}")
-                                                cp.f_tmdbpersontosqleverything(lngid)
+                                                tf.f_tmdbpersontosqleverything(lngid)
                                                 lngcount += 1
                                             else:
                                                 results3 = cursor3.fetchall()
@@ -684,7 +697,7 @@ SET autocommit = 1; """
                                             if lngrowcount == 0:
                                                 #print("Not already retrieved so we have to update it from the TMDb API")
                                                 print(f"{strtmdbchanges} changed id: {lngid}")
-                                                cp.f_tmdbserietosqleverything(lngid)
+                                                tf.f_tmdbserietosqleverything(lngid)
                                                 lngcount += 1
                                             else:
                                                 results3 = cursor3.fetchall()

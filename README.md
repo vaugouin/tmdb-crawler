@@ -188,7 +188,8 @@ The crawler maintains several server variables for monitoring:
 tmdb-crawler/
 ├── tmdb-crawler.py                    # Main crawler script - core application logic
 ├── tmdb-crawler.sh                    # Docker management script for container lifecycle
-├── citizenphil.py                     # Custom module for database and API management
+├── tmdb_functions.py                  # TMDb API wrapper functions module
+├── citizenphil.py                     # Core utility module for database and helpers
 ├── citizenphilsecrets.py              # Configuration file with credentials (not in git)
 ├── citizenphilsecrets.example.py      # Template for configuration file
 ├── Dockerfile                         # Container configuration for Docker deployment
@@ -197,19 +198,22 @@ tmdb-crawler/
 ├── T_WC_SERVER_VARIABLE.sql           # Server variables table setup script
 ├── Wikidata-tables.sql                # Wikidata integration tables creation script
 ├── Wikipedia-tables.sql               # Wikipedia data tables creation script
+├── Text2SQL-tables.sql                # Text-to-SQL data tables creation script
 ├── .gitignore                         # Git ignore rules for sensitive files
 └── README.md                          # This documentation
 ```
 
 ### Key Files Description
 
-- **`tmdb-crawler.py`** - The main application containing all crawler logic, API interactions, and database operations
-- **`citizenphil.py`** - Core utility module providing database connectivity, API management, and common functions
+- **`tmdb-crawler.py`** - The main application containing all crawler logic and processing loops
+- **`tmdb_functions.py`** - TMDb API wrapper module with all functions for fetching and storing movies, series, persons, collections, companies, networks, keywords, and lists
+- **`citizenphil.py`** - Core utility module providing database connectivity, SQL helpers, server variable management, and common functions
 - **`citizenphilsecrets.py`** - Configuration file containing database credentials and API keys (excluded from version control)
 - **`TMDb-tables.sql`** - SQL script to create all required database tables and indexes for the TMDb data
 - **`T_WC_SERVER_VARIABLE.sql`** - SQL script to set up server variables table for tracking processing state
 - **`Wikidata-tables.sql`** - SQL script to create database tables for Wikidata integration and cross-referencing
 - **`Wikipedia-tables.sql`** - SQL script to create database tables for Wikipedia data integration
+- **`Text2SQL-tables.sql`** - SQL script to create database tables for Text-to-SQL query API
 - **`tmdb-crawler.sh`** - Shell script for easy Docker container management and deployment
 
 ## Notes
