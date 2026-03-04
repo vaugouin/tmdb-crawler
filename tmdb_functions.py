@@ -450,9 +450,9 @@ def f_tmdbpersontosql(lngpersonid):
                     strpersonidimdb = data['imdb_id']
                 strpersonbiography = data['biography']
                 strpersonbirthday = data['birthday']
-                lngpersonbirthyear = 0
-                lngpersonbirthmonth = 0
-                lngpersonbirthday = 0
+                lngpersonbirthyear = None
+                lngpersonbirthmonth = None
+                lngpersonbirthday = None
                 if strpersonbirthday:
                     if not re.match(strdatepattern, strpersonbirthday):
                         # Date is invalid
@@ -460,9 +460,9 @@ def f_tmdbpersontosql(lngpersonid):
                     else:
                         lngpersonbirthyear, lngpersonbirthmonth, lngpersonbirthday = map(int, strpersonbirthday.split('-'))
                 strpersondeathday = data['deathday']
-                lngpersondeathyear = 0
-                lngpersondeathmonth = 0
-                lngpersondeathday = 0
+                lngpersondeathyear = None
+                lngpersondeathmonth = None
+                lngpersondeathday = None
                 if strpersondeathday:
                     if not re.match(strdatepattern, strpersondeathday):
                         # Date is invalid
