@@ -23,9 +23,10 @@ print(f"strtmdbdatprev={strtmdbdatprev}")
 print(f"strimdbdatprev={strimdbdatprev}")
 
 try:
-    with cp.connectioncp:
-        with cp.connectioncp.cursor() as cursor:
-            cursor3 = cp.connectioncp.cursor()
+    conn = cp.f_getconnection()
+    with conn:
+        with conn.cursor() as cursor:
+            cursor3 = conn.cursor()
             # Start timing the script execution
             start_time = time.time()
             strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
@@ -38,7 +39,7 @@ try:
             strtotalruntimedesc = "Total runtime of the TMDb crawler"
             strtotalruntimeprevious = cp.f_getservervariable("strtmdbcrawlertotalruntime",0)
             cp.f_setservervariable("strtmdbcrawlertotalruntimeprevious",strtotalruntimeprevious,strtotalruntimedesc + " (previous execution)",0)
-            strtotalruntime = ""
+            strtotalruntime = "RUNNING"
             cp.f_setservervariable("strtmdbcrawlertotalruntime",strtotalruntime,strtotalruntimedesc,0)
             # Which id files should we process from the TMDb HTTP server? 
             arrtmdbidfilename = {41: 'movie', 42:'person', 43:'collection', 44:'tv_series', 45: 'keyword', 46: 'tv_network', 47: 'production_company'}
@@ -220,12 +221,13 @@ SET autocommit = 1; """
                                                 cursor.execute(strsql, list(record.values()))
                                                 lngcount += 1
                                                 if lngcount % 100 == 0:
-                                                    cp.connectioncp.commit()
+                                                    conn.commit()
                                                     cp.f_setservervariable("strtmdbcrawlertmdbid"+strtmdbidfilename+"count",str(lngcount),"Record count of the TMDb "+strtmdbidfilename+" ID import file",0)
                                             except pymysql.MySQLError as e:
                                                 print(f"❌ MySQL Error: {e}")
-                                                cp.connectioncp.rollback()
-                                    cp.connectioncp.commit()
+                                                if getattr(conn, "open", False):
+                                                    conn.rollback()
+                                    conn.commit()
                                     cp.f_setservervariable("strtmdbcrawlertmdbid"+strtmdbidfilename+"count",str(lngcount),"Record count of the TMDb "+strtmdbidfilename+" ID import file",0)
                             print(f"Import {strlocaljsonfilename} to {strtmdbidsqltable} done!")
                             # File is read in the database so we delete it: .json.gz and .json file
@@ -243,7 +245,12 @@ SET autocommit = 1; """
             intdownloadok = False
             
             # Now handling new contents from TMdB (Loop #2)
-            arrprocessscope = {17: 'new companies', 18: 'new networks', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 22: 'refreshing movies', 28: 'refreshing series', 24: 'refreshing persons', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
+            arrprocessscope = {17: 'new companies', 18: 'new networks', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
+            # Disabled the refreshing of movies, series and persons for now because it is very long and we do not need to refresh all movies, series and persons at the same time. 
+            #arrprocessscope = {22: 'refreshing movies', 28: 'refreshing series', 24: 'refreshing persons'}
+            #if strnow.startswith("2026-03-09"):
+            #    arrprocessscope = {13:'refresh lists'}
+            #    strtmdbdatprev = "2026-01-01"
             #arrprocessscope = {22: 'refreshing movies'}
             #arrprocessscope = {4: 'new series', 16: 'deleted series', 33: 'missing series'}
             #arrprocessscope = {17: 'new companies', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 13:'refresh lists', 23: 'wikidata movie id fix', 31: 'missing persons', 32: 'missing movies'}
@@ -329,7 +336,6 @@ SET autocommit = 1; """
                     #strsql += "SELECT ID_LIST FROM T_WC_TMDB_LIST WHERE DELETED = 0 AND USE_FOR_TAGGING = 1 "
                     #strsql += ") "
                     #strsql += ") "
-                    #strsql += "OR (T_WC_WIKIDATA_MOVIE.ID_CRITERION IS NOT NULL AND T_WC_WIKIDATA_MOVIE.ID_CRITERION <> 0) "
                     #strsql += ") "
                     strsql += "ORDER BY T_WC_TMDB_MOVIE.TIM_UPDATED ASC "
                     strsql += "LIMIT 20000 "
@@ -364,15 +370,15 @@ SET autocommit = 1; """
                         strcurrentprocess = f"{intindex}: refreshing movies when id wikidata is not set"
                         strsql = ""
                         strsql += "SELECT T_WC_TMDB_MOVIE.ID_MOVIE AS id, "
-                        strsql += "T_WC_WIKIDATA_MOVIE.ID_WIKIDATA AS ID_WIKIDATA, "
-                        strsql += "T_WC_WIKIDATA_MOVIE.ID_IMDB, "
-                        strsql += "T_WC_WIKIDATA_MOVIE.ID_MOVIE AS ID_WIKIDATA_MOVIE, "
+                        strsql += "T_WC_WIKIDATA_MOVIE_V1.ID_WIKIDATA AS ID_WIKIDATA, "
+                        strsql += "T_WC_WIKIDATA_MOVIE_V1.ID_IMDB, "
+                        strsql += "T_WC_WIKIDATA_MOVIE_V1.ID_MOVIE AS ID_WIKIDATA_MOVIE, "
                         strsql += "T_WC_TMDB_MOVIE.ID_WIKIDATA AS ID_TMDB_WIKIDATA, "
                         strsql += "T_WC_TMDB_MOVIE.TITLE "
-                        strsql += "FROM T_WC_WIKIDATA_MOVIE "
-                        strsql += "INNER JOIN T_WC_TMDB_MOVIE ON T_WC_WIKIDATA_MOVIE.ID_IMDB = T_WC_TMDB_MOVIE.ID_IMDB "
-                        strsql += "WHERE T_WC_WIKIDATA_MOVIE.ID_IMDB IS NOT NULL AND T_WC_WIKIDATA_MOVIE.ID_IMDB <> '' AND T_WC_WIKIDATA_MOVIE.ID_IMDB LIKE 'tt%' "
-                        strsql += "AND T_WC_WIKIDATA_MOVIE.ID_WIKIDATA <> T_WC_TMDB_MOVIE.ID_WIKIDATA "
+                        strsql += "FROM T_WC_WIKIDATA_MOVIE_V1 "
+                        strsql += "INNER JOIN T_WC_TMDB_MOVIE ON T_WC_WIKIDATA_MOVIE_V1.ID_IMDB = T_WC_TMDB_MOVIE.ID_IMDB "
+                        strsql += "WHERE T_WC_WIKIDATA_MOVIE_V1.ID_IMDB IS NOT NULL AND T_WC_WIKIDATA_MOVIE_V1.ID_IMDB <> '' AND T_WC_WIKIDATA_MOVIE_V1.ID_IMDB LIKE 'tt%' "
+                        strsql += "AND T_WC_WIKIDATA_MOVIE_V1.ID_WIKIDATA <> T_WC_TMDB_MOVIE.ID_WIKIDATA "
                         strsql += "AND (T_WC_TMDB_MOVIE.ID_WIKIDATA IS NULL OR T_WC_TMDB_MOVIE.ID_WIKIDATA = '') "
                         strsql += "ORDER BY T_WC_TMDB_MOVIE.ID_MOVIE ASC "
                 elif intindex == 25:
@@ -582,6 +588,9 @@ SET autocommit = 1; """
                         cp.f_setservervariable("strtmdbcrawlerdatetime",strnow,"Date and time of the last crawled record using the TMDb API",0)
                 print("------------------------------------------")
             strsql = ""
+            
+            #if strnow.startswith("2026-03-09"):
+            #    exit()
             
             # Now updating changed contents (Loop #3)
             strnowdate = datetime.now(cp.paris_tz).strftime("%Y-%m-%d")
@@ -896,10 +905,10 @@ SET autocommit = 1; """
 
                     lngcount += 1
                     if lngcount % 100 == 0:
-                        cp.connectioncp.commit()
+                        conn.commit()
                         print(f"Processed {lngcount} records, inserted {lnginsertcount} missing images")
 
-                cp.connectioncp.commit()
+                conn.commit()
                 return lngcount, lnginsertcount
 
             # Now handling missing images (Loop #4)
@@ -939,4 +948,6 @@ SET autocommit = 1; """
     print("Process completed")
 except pymysql.MySQLError as e:
     print(f"❌ MySQL Error: {e}")
-    cp.connectioncp.rollback()
+    conn = getattr(cp, "connectioncp", None)
+    if conn is not None and getattr(conn, "open", False):
+        conn.rollback()

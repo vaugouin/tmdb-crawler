@@ -1,2 +1,2 @@
-mv tmdb-crawler.sh tmdb-crawler-old.sh
+mv tmdb-crawler.sh tmdb-crawler-off.sh
 
