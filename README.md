@@ -16,6 +16,13 @@ The TMDb Crawler is designed to maintain an up-to-date local database of enterta
 ### Database Setup
 Before running the TMDb Crawler, you need to create the required database tables and server variables:
 
+Required privileges for MariaDB user:
+GRANT SELECT, INSERT, UPDATE, DELETE, ALTER
+ON your_database_name.*
+TO 'your_mysql_username'@'%';
+GRANT FILE ON *.* TO 'your_mysql_username'@'%';
+FLUSH PRIVILEGES;
+
 1. **Create TMDb Tables**: Execute the `TMDb-tables.sql` script in your MariaDB/MySQL database to create all necessary tables and indexes.
    ```sql
    mysql -u your_username -p your_database < TMDb-tables.sql
