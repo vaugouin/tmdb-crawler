@@ -593,6 +593,7 @@ SET autocommit = 1; """
                                                 print(f"{strtmdbchanges} changed id: {lngid}")
                                                 try:
                                                     tf.f_tmdbserietosqleverything(lngid)
+                                                    tf.f_tmdbserieselectiveseasonsepisodestosql(lngid)
                                                 except pymysql.MySQLError as e:
                                                     if cp.f_ismysqllocktimeout(e):
                                                         cp.f_handlemysqlerror(e, f"changes {inttmdbchanges} {strtmdbchanges} id {lngid}")

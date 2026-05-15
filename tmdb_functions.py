@@ -35,6 +35,12 @@ strdatepattern = r"^\d{4}-\d{2}-\d{2}$"
 strlanguagecountry = "en-US"
 strlanguage = "en"
 
+# Selective TV refresh tuning (see SERIE_UPDATE.md). TODO: move to T_WC_SERVER_VARIABLE.
+INT_RECENT_SEASON_DAYS = 120
+INT_RECENT_EPISODE_DAYS = 45
+INT_ACTIVE_SERIES_LOOKBACK_DAYS = 90
+INT_TMDB_CHANGES_MAX_DAYS = 14
+
 def f_tmdbjsonremovekeys(strjson,strbegin,strend,strreplace):
     """
     Remove a key-value section from a JSON string by finding and replacing text between markers.
@@ -1724,7 +1730,42 @@ def f_tmdbserietosql(lngserieid):
             strserietype = ""
             if 'type' in data:
                 strserietype = data['type']
-            
+
+            # Activity signals (drive selective season/episode refresh)
+            intinproduction = None
+            if 'in_production' in data:
+                booinproduction = data['in_production']
+                if booinproduction is True:
+                    intinproduction = 1
+                elif booinproduction is False:
+                    intinproduction = 0
+
+            strnextepisodedatair = None
+            lngnextepisodeseasonnumber = None
+            lngnextepisodenumber = None
+            if 'next_episode_to_air' in data and data['next_episode_to_air']:
+                arrnextepisode = data['next_episode_to_air']
+                if 'air_date' in arrnextepisode and arrnextepisode['air_date']:
+                    if re.match(strdatepattern, arrnextepisode['air_date']):
+                        strnextepisodedatair = arrnextepisode['air_date']
+                if 'season_number' in arrnextepisode:
+                    lngnextepisodeseasonnumber = arrnextepisode['season_number']
+                if 'episode_number' in arrnextepisode:
+                    lngnextepisodenumber = arrnextepisode['episode_number']
+
+            strlastepisodedatair = None
+            lnglastepisodeseasonnumber = None
+            lnglastepisodenumber = None
+            if 'last_episode_to_air' in data and data['last_episode_to_air']:
+                arrlastepisode = data['last_episode_to_air']
+                if 'air_date' in arrlastepisode and arrlastepisode['air_date']:
+                    if re.match(strdatepattern, arrlastepisode['air_date']):
+                        strlastepisodedatair = arrlastepisode['air_date']
+                if 'season_number' in arrlastepisode:
+                    lnglastepisodeseasonnumber = arrlastepisode['season_number']
+                if 'episode_number' in arrlastepisode:
+                    lnglastepisodenumber = arrlastepisode['episode_number']
+
             # Process production countries
             strseriecountries = ""
             strcountryidlist = ""
@@ -1926,6 +1967,15 @@ def f_tmdbserietosql(lngserieid):
             arrseriecouples["NUMBER_OF_EPISODES"] = lngnumberofepisodes
             arrseriecouples["NUMBER_OF_SEASONS"] = lngnumberofseasons
             arrseriecouples["SERIE_TYPE"] = strserietype
+
+            # Activity signals (always set so they get cleared when TMDb drops them)
+            arrseriecouples["IN_PRODUCTION"] = intinproduction
+            arrseriecouples["NEXT_EPISODE_DAT_AIR"] = strnextepisodedatair
+            arrseriecouples["NEXT_EPISODE_SEASON_NUMBER"] = lngnextepisodeseasonnumber
+            arrseriecouples["NEXT_EPISODE_NUMBER"] = lngnextepisodenumber
+            arrseriecouples["LAST_EPISODE_DAT_AIR"] = strlastepisodedatair
+            arrseriecouples["LAST_EPISODE_SEASON_NUMBER"] = lnglastepisodeseasonnumber
+            arrseriecouples["LAST_EPISODE_NUMBER"] = lnglastepisodenumber
             
             # Store created_by array for later use with credits
             arrcreatedby = []
@@ -2502,7 +2552,7 @@ def f_tmdbseasongetid(lngserieid, lngseasonnumber):
         (lngserieid, lngseasonnumber)
     )
     row = cursor2.fetchone()
-    return int(row[0]) if row else 0
+    return int(row['ID_SEASON']) if row else 0
 
 def f_tmdbepisodegetid(lngserieid, lngseasonnumber, lngepisodenumber):
     """Look up the TMDb episode id for a given (series, season, episode) triple."""
@@ -2513,7 +2563,7 @@ def f_tmdbepisodegetid(lngserieid, lngseasonnumber, lngepisodenumber):
         (lngserieid, lngseasonnumber, lngepisodenumber)
     )
     row = cursor2.fetchone()
-    return int(row[0]) if row else 0
+    return int(row['ID_EPISODE']) if row else 0
 
 def _f_tmdbepisoderowtosql(lngserieid, lngseasonid, episode):
     """Insert/update one T_WC_TMDB_EPISODE row + embedded crew/guest_stars credits.
@@ -2909,7 +2959,7 @@ def f_tmdbseasondelete(lngseasonid):
         "SELECT ID_EPISODE FROM T_WC_TMDB_EPISODE WHERE ID_SEASON = %s",
         (lngseasonid,)
     )
-    episode_ids = [row[0] for row in cursor2.fetchall()]
+    episode_ids = [row['ID_EPISODE'] for row in cursor2.fetchall()]
     for lngepisodeid in episode_ids:
         f_tmdbepisodedelete(lngepisodeid)
 
@@ -3504,6 +3554,267 @@ def f_tmdbepisodetosqleverything(lngserieid, lngseasonnumber, lngepisodenumber):
     f_tmdbepisodevideotosql(lngserieid, lngseasonnumber, lngepisodenumber, 'fr')
     return lngepisodeid
 
+def f_tmdbseriechangesget(lngserieid, strstartdate=None):
+    """
+    GET /tv/{id}/changes?start_date=YYYY-MM-DD.
+
+    Returns the parsed `changes[]` list (each item is a dict with `key` and
+    `items[]`) or None on HTTP/JSON failure / TMDb error. Returns [] when
+    TMDb reports no changes in the window.
+
+    `strstartdate` must be within the last 14 days; caller is responsible for
+    deciding whether to pass None (= full window, but TMDb still caps at 14d).
+    """
+    global strtmdbapidomainurl
+    if lngserieid <= 0:
+        return None
+    strurl = strtmdbapidomainurl + "/3/tv/" + str(lngserieid) + "/changes"
+    if strstartdate:
+        strurl += "?start_date=" + strstartdate
+    data = f_tmdbfetchjson(strurl, f"f_tmdbseriechangesget({lngserieid})")
+    if data is None:
+        return None
+    if data.get('status_code', 0) > 1:
+        return None
+    return data.get('changes') or []
+
+
+def _f_tmdbseriestamplastchangescheck(lngserieid):
+    """Stamp T_WC_TMDB_SERIE.TIM_LAST_CHANGES_CHECK = now."""
+    global paris_tz
+    global connectioncp
+    if lngserieid <= 0:
+        return
+    strnow = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+    cursor2 = connectioncp.cursor()
+    cursor2.execute(
+        f"UPDATE T_WC_TMDB_SERIE SET TIM_LAST_CHANGES_CHECK = '{strnow}', "
+        f"TIM_UPDATED = '{strnow}' WHERE ID_SERIE = {lngserieid};"
+    )
+    connectioncp.commit()
+
+
+def _f_tmdbseriestampchildrencompleted(lngserieid, strcolumn):
+    """Stamp a children-completion column on the series row (TIM_SEASONS_COMPLETED
+    or TIM_EPISODES_COMPLETED)."""
+    global paris_tz
+    global connectioncp
+    if lngserieid <= 0:
+        return
+    strnow = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+    cursor2 = connectioncp.cursor()
+    cursor2.execute(
+        f"UPDATE T_WC_TMDB_SERIE SET {strcolumn} = '{strnow}', "
+        f"TIM_UPDATED = '{strnow}' WHERE ID_SERIE = {lngserieid};"
+    )
+    connectioncp.commit()
+
+
+def f_tmdbserieselectiveseasonsepisodestosql(lngserieid):
+    """
+    Selective season+episode refresh driven by /tv/{id}/changes.
+    Implements the four-tier strategy documented in SERIE_UPDATE.md.
+
+    Assumes f_tmdbserietosqleverything has already been called for this series
+    (series row + activity signals up to date). Side effects:
+      - Refreshes only the seasons/episodes selected by the rules.
+      - Stamps TIM_LAST_CHANGES_CHECK on success.
+      - Stamps TIM_SEASONS_COMPLETED / TIM_EPISODES_COMPLETED when the selected
+        children all completed successfully.
+    """
+    global strtmdbapidomainurl
+    global connectioncp
+
+    if lngserieid <= 0:
+        return
+
+    cursor2 = connectioncp.cursor()
+    cursor2.execute(
+        "SELECT TIM_LAST_CHANGES_CHECK, IN_PRODUCTION, "
+        "       NEXT_EPISODE_DAT_AIR, LAST_EPISODE_DAT_AIR "
+        "FROM T_WC_TMDB_SERIE WHERE ID_SERIE = %s",
+        (lngserieid,)
+    )
+    serierow = cursor2.fetchone()
+    if not serierow:
+        print(f"f_tmdbserieselectiveseasonsepisodestosql: series {lngserieid} not in DB")
+        return
+
+    today = datetime.now().date()
+
+    # --- T1: ask TMDb what changed ---
+    strstartdate = None
+    timlastcheck = serierow['TIM_LAST_CHANGES_CHECK']
+    if timlastcheck is not None:
+        gapdays = (datetime.now() - timlastcheck).days
+        if 0 <= gapdays <= INT_TMDB_CHANGES_MAX_DAYS:
+            strstartdate = timlastcheck.strftime('%Y-%m-%d')
+
+    arrchanges = None
+    if strstartdate is not None:
+        arrchanges = f_tmdbseriechangesget(lngserieid, strstartdate)
+    # arrchanges interpretation:
+    #   None        — no usable T1 info (NULL/gap>14d/HTTP error) → apply full rules
+    #   []          — TMDb reports nothing changed
+    #   [items...]  — list of {key, items[]}
+
+    booseasonsignaled = False
+    arrepisodehintsmap = {}  # {season_number: set(episode_numbers)}
+    if arrchanges:
+        for change in arrchanges:
+            strkey = change.get('key', '')
+            if strkey == 'seasons':
+                booseasonsignaled = True
+            elif strkey == 'episodes':
+                arritems = change.get('items') or []
+                for item in arritems:
+                    arrval = item.get('value') or {}
+                    snum = arrval.get('season_number')
+                    enum = arrval.get('episode_number')
+                    if snum is not None and enum is not None:
+                        arrepisodehintsmap.setdefault(int(snum), set()).add(int(enum))
+
+    booneedseasonscan = (
+        arrchanges is None
+        or booseasonsignaled
+        or bool(arrepisodehintsmap)
+    )
+    if not booneedseasonscan:
+        # Stable series, nothing relevant changed — just record the check time.
+        _f_tmdbseriestamplastchangescheck(lngserieid)
+        return
+
+    # --- T2: snapshot /tv/{id} for seasons[] ---
+    strtmdbapifullurl = strtmdbapidomainurl + "/3/tv/" + str(lngserieid)
+    seriedata = f_tmdbfetchjson(strtmdbapifullurl, f"f_tmdbserieselectiveseasonsepisodestosql({lngserieid})")
+    if seriedata is None or seriedata.get('status_code', 0) > 1:
+        return
+    arrtmdbseasons = seriedata.get('seasons') or []
+
+    # "Active" judgment from persisted signals.
+    booserieactive = False
+    if serierow['IN_PRODUCTION'] == 1:
+        booserieactive = True
+    elif serierow['NEXT_EPISODE_DAT_AIR'] is not None:
+        booserieactive = True
+    elif serierow['LAST_EPISODE_DAT_AIR'] is not None:
+        if (today - serierow['LAST_EPISODE_DAT_AIR']).days <= INT_ACTIVE_SERIES_LOOKBACK_DAYS:
+            booserieactive = True
+
+    lnglatestseasonnumber = None
+    if booserieactive and arrtmdbseasons:
+        arrcand = [s.get('season_number') for s in arrtmdbseasons
+                   if s.get('season_number') is not None and (s.get('season_number') or 0) > 0]
+        if arrcand:
+            lnglatestseasonnumber = max(arrcand)
+
+    # --- T3 selection ---
+    arrseasonselections = []  # list of (season_number, reason)
+    for tmdbseason in arrtmdbseasons:
+        snum = tmdbseason.get('season_number')
+        if snum is None:
+            continue
+        snum = int(snum)
+        strreason = None
+        lnglocalseasonid = f_tmdbseasongetid(lngserieid, snum)
+        if lnglocalseasonid == 0:
+            strreason = "missing locally"
+        else:
+            cursor3 = connectioncp.cursor()
+            cursor3.execute(
+                "SELECT EPISODE_COUNT, DAT_AIR, "
+                "       TIM_CREDITS_COMPLETED, TIM_TRANSLATIONS_COMPLETED, "
+                "       TIM_IMAGES_COMPLETED, TIM_VIDEOS_COMPLETED "
+                "FROM T_WC_TMDB_SEASON WHERE ID_SEASON = %s",
+                (lnglocalseasonid,)
+            )
+            seasonrow = cursor3.fetchone()
+            if not seasonrow:
+                strreason = "local row missing"
+            else:
+                tmdbepcount = tmdbseason.get('episode_count')
+                localepcount = seasonrow['EPISODE_COUNT']
+                if tmdbepcount is not None and localepcount != tmdbepcount:
+                    strreason = f"episode_count drift ({localepcount} -> {tmdbepcount})"
+                elif (seasonrow['TIM_CREDITS_COMPLETED'] is None or
+                      seasonrow['TIM_TRANSLATIONS_COMPLETED'] is None or
+                      seasonrow['TIM_IMAGES_COMPLETED'] is None or
+                      seasonrow['TIM_VIDEOS_COMPLETED'] is None):
+                    strreason = "season completion incomplete"
+                elif seasonrow['DAT_AIR'] is not None:
+                    intagedays = (today - seasonrow['DAT_AIR']).days
+                    if 0 <= intagedays <= INT_RECENT_SEASON_DAYS:
+                        strreason = f"recent season ({intagedays}d)"
+                if strreason is None and snum == lnglatestseasonnumber:
+                    strreason = "active series, latest season"
+        if strreason is None and snum in arrepisodehintsmap:
+            strreason = "T1 episodes hint"
+        if strreason is not None:
+            arrseasonselections.append((snum, strreason))
+
+    # --- T3: refresh selected seasons ---
+    arrrefreshedseasonnumbers = set()
+    booallseasonsok = True
+    for snum, strreason in arrseasonselections:
+        print(f"  selective: refresh season {snum} ({strreason})")
+        lngseasonid = f_tmdbseasontosqleverything(lngserieid, snum)
+        if lngseasonid > 0:
+            arrrefreshedseasonnumbers.add(snum)
+        else:
+            booallseasonsok = False
+
+    # --- T4 selection + refresh ---
+    booallepisodesok = True
+    boohadepisodework = False
+    for snum in arrrefreshedseasonnumbers:
+        lngseasonid = f_tmdbseasongetid(lngserieid, snum)
+        if lngseasonid == 0:
+            continue
+        cursor3 = connectioncp.cursor()
+        cursor3.execute(
+            "SELECT EPISODE_NUMBER, DAT_AIR, "
+            "       TIM_CREDITS_COMPLETED, TIM_TRANSLATIONS_COMPLETED, "
+            "       TIM_IMAGES_COMPLETED, TIM_VIDEOS_COMPLETED "
+            "FROM T_WC_TMDB_EPISODE WHERE ID_SEASON = %s ORDER BY EPISODE_NUMBER",
+            (lngseasonid,)
+        )
+        arrepisodes = cursor3.fetchall()
+        snhints = arrepisodehintsmap.get(snum, set())
+        booactiveseason = (snum == lnglatestseasonnumber)
+        for eprow in arrepisodes:
+            enum = eprow['EPISODE_NUMBER']
+            if enum is None:
+                continue
+            enum = int(enum)
+            strepreason = None
+            if enum in snhints:
+                strepreason = "T1 episodes hint"
+            elif (eprow['TIM_CREDITS_COMPLETED'] is None or
+                  eprow['TIM_TRANSLATIONS_COMPLETED'] is None or
+                  eprow['TIM_IMAGES_COMPLETED'] is None or
+                  eprow['TIM_VIDEOS_COMPLETED'] is None):
+                strepreason = "episode completion incomplete"
+            elif eprow['DAT_AIR'] is not None:
+                intepagedays = (today - eprow['DAT_AIR']).days
+                if 0 <= intepagedays <= INT_RECENT_EPISODE_DAYS:
+                    strepreason = f"recent episode ({intepagedays}d)"
+            if strepreason is None and booactiveseason:
+                strepreason = "active season"
+            if strepreason is not None:
+                boohadepisodework = True
+                print(f"    selective: refresh S{snum:02d}E{enum:02d} ({strepreason})")
+                lngepid = f_tmdbepisodetosqleverything(lngserieid, snum, enum)
+                if lngepid <= 0:
+                    booallepisodesok = False
+
+    # --- Completion stamps ---
+    _f_tmdbseriestamplastchangescheck(lngserieid)
+    if arrseasonselections and booallseasonsok:
+        _f_tmdbseriestampchildrencompleted(lngserieid, "TIM_SEASONS_COMPLETED")
+    if boohadepisodework and booallepisodesok:
+        _f_tmdbseriestampchildrencompleted(lngserieid, "TIM_EPISODES_COMPLETED")
+
+
 def f_tmdbserieallseasonsepisodestosql(lngserieid, intloadepisodes=1):
     """
     For a given series, load every season (with embedded episode basic data
@@ -3512,6 +3823,9 @@ def f_tmdbserieallseasonsepisodestosql(lngserieid, intloadepisodes=1):
     and videos.
 
     Reads number_of_seasons from the TMDb API to know how many to iterate.
+
+    Bootstrap-only / operator-backfill entrypoint. The TMDb-changes loop
+    uses f_tmdbserieselectiveseasonsepisodestosql instead.
     """
     global strtmdbapidomainurl
     global headers
@@ -3548,7 +3862,7 @@ def f_tmdbserieallseasonsepisodestosql(lngserieid, intloadepisodes=1):
             "WHERE ID_SEASON = %s ORDER BY EPISODE_NUMBER",
             (lngseasonid,)
         )
-        episode_numbers = [row[0] for row in cursor2.fetchall() if row[0] is not None]
+        episode_numbers = [row['EPISODE_NUMBER'] for row in cursor2.fetchall() if row['EPISODE_NUMBER'] is not None]
         for lngepisodenumber in episode_numbers:
             f_tmdbepisodetosqleverything(lngserieid, lngseasonnumber, lngepisodenumber)
 
