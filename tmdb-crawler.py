@@ -388,6 +388,14 @@ SET autocommit = 1; """
                     strsql += "ORDER BY ID_SERIE "
                 return strcurrentprocess, strsql
 
+            # Time budget (in seconds) for the f_tmdbserieselectiveseasonsepisodestosql calls
+            # in process 28 (refreshing series) and in the tv/changes loop (changes 53).
+            # Tunable via server variable "strtmdbcrawlerseasonsepisodestimebudget".
+            lngseasonsepisodestimebudgetdefault = 7200
+            # Mutable container so f_executeprocessrow (nested fn) can deduct elapsed time
+            # while f_runprocessscope reads the remaining value to decide when to stop.
+            lngprocess28timebudgetremaining = [0.0]
+
             def f_executeprocessrow(intindex, row):
                 lngid = row['id']
                 if intindex in (1, 25):
@@ -396,8 +404,18 @@ SET autocommit = 1; """
                     tf.f_tmdbmovietosqleverything(lngid)
                 elif intindex in (3, 24, 31):
                     tf.f_tmdbpersontosqleverything(lngid)
-                elif intindex in (4, 28, 33):
+                elif intindex in (4, 33):
                     tf.f_tmdbserietosqleverything(lngid)
+                    tf.f_tmdbserieselectiveseasonsepisodestosql(lngid)
+                elif intindex == 28:
+                    tf.f_tmdbserietosqleverything(lngid)
+                    timstart = time.monotonic()
+                    try:
+                        tf.f_tmdbserieselectiveseasonsepisodestosql(lngid)
+                    finally:
+                        timelapsed = time.monotonic() - timstart
+                        lngprocess28timebudgetremaining[0] -= timelapsed
+                        print(f"Process 28: series {lngid} seasons/episodes took {timelapsed:.1f}s; time budget remaining: {lngprocess28timebudgetremaining[0]:.1f}s")
                 elif intindex in (17, 26):
                     tf.f_tmdbcompanytosqleverything(lngid)
                 elif intindex in (18, 27):
@@ -439,6 +457,14 @@ SET autocommit = 1; """
                         lngcount = 0
                         strdescvarname = strdesc.replace(" ","")
                         print("strdescvarname", strdescvarname)
+                        if intindex == 28:
+                            strbudget = cp.f_getservervariable("strtmdbcrawlerseasonsepisodestimebudget",0)
+                            if strbudget:
+                                lngprocess28timebudgetremaining[0] = float(strbudget)
+                            else:
+                                lngprocess28timebudgetremaining[0] = float(lngseasonsepisodestimebudgetdefault)
+                                cp.f_setservervariable("strtmdbcrawlerseasonsepisodestimebudget",str(lngseasonsepisodestimebudgetdefault),"Time budget (seconds) for the seasons/episodes refresh in process 28 and changes-53",0)
+                            print(f"Process 28: seasons/episodes time budget set to {lngprocess28timebudgetremaining[0]:.0f}s")
                         cursor.execute(strsql)
                         lngrowcount = cursor.rowcount
                         print(f"{lngrowcount} lines")
@@ -452,6 +478,9 @@ SET autocommit = 1; """
                             cp.f_setservervariable("strtmdbcrawlerprocess"+str(intindex)+strdescvarname+"count",str(lngcount),"Count of rows processed for process "+str(intindex)+" : "+strdesc+"",0)
                             strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
                             cp.f_setservervariable("strtmdbcrawlerdatetime",strnow,"Date and time of the last crawled record using the TMDb API",0)
+                            if intindex == 28 and lngprocess28timebudgetremaining[0] < 0:
+                                print(f"Process 28: time budget exhausted ({lngprocess28timebudgetremaining[0]:.1f}s remaining) after {lngcount} series. Stopping.")
+                                break
                     print("------------------------------------------")
                 return strprocessesexecuted
 
@@ -471,6 +500,13 @@ SET autocommit = 1; """
             #arrtmdbchanges = {0: 'nothing'}
             #if strnow.startswith("2026-04-20"):
             #    arrtmdbchanges = {0: 'nothing'}
+            strchangesbudget = cp.f_getservervariable("strtmdbcrawlerseasonsepisodestimebudget",0)
+            if strchangesbudget:
+                lngchangesseasonsepisodestimebudget = float(strchangesbudget)
+            else:
+                lngchangesseasonsepisodestimebudget = float(lngseasonsepisodestimebudgetdefault)
+                cp.f_setservervariable("strtmdbcrawlerseasonsepisodestimebudget",str(lngseasonsepisodestimebudgetdefault),"Time budget (seconds) for the seasons/episodes refresh in process 28 and changes-53",0)
+            print(f"Changes loop: seasons/episodes time budget set to {lngchangesseasonsepisodestimebudget:.0f}s")
             for inttmdbchanges,strtmdbchanges in arrtmdbchanges.items():
                 strprocessesexecuted += str(inttmdbchanges) + ", "
                 cp.f_setservervariable("strtmdbcrawlerprocessesexecuted",strprocessesexecuted,strprocessesexecuteddesc,0)
@@ -520,12 +556,18 @@ SET autocommit = 1; """
                             dattmdbchangesdateplus2 = dattmdbchangesdate + timedelta(days=2)
                             strtmdbchangesdateplus2 = dattmdbchangesdateplus2.strftime('%Y-%m-%d')
                             intencore = True
+                            boolapifailed = False
                             while intencore:
                                 strtmdbapichangesurl = "3/" + strtmdbchangesapi + "/changes?start_date=" + strtmdbchangesdate + "&end_date=" + strtmdbchangesdate + "&page=" + str(lngpage)
                                 strtmdbapifullurl = cp.strtmdbapidomainurl + "/" + strtmdbapichangesurl
                                 print(strtmdbapifullurl)
-                                response = requests.get(strtmdbapifullurl, headers=cp.headers)
-                                data = response.json()
+                                data = tf.f_tmdbfetchjson(strtmdbapifullurl, f"changes {strtmdbchangesapi} {strtmdbchangesdate} page {lngpage}")
+                                if data is None or 'results' not in data or 'total_pages' not in data:
+                                    print(f"Skipping {strtmdbchanges} changes for {strtmdbchangesdate}: TMDb API call failed after retries")
+                                    boolapifailed = True
+                                    intencore = False
+                                    intencoredate = False
+                                    break
                                 # print(data)
                                 results = data['results']
                                 lngtotalpages = data['total_pages']
@@ -593,6 +635,16 @@ SET autocommit = 1; """
                                                 print(f"{strtmdbchanges} changed id: {lngid}")
                                                 try:
                                                     tf.f_tmdbserietosqleverything(lngid)
+                                                    if lngchangesseasonsepisodestimebudget <= 0:
+                                                        print(f"Skipping season/episode for series {lngid} because seasons/episodes time budget exhausted")
+                                                    else:
+                                                        timstart = time.monotonic()
+                                                        try:
+                                                            tf.f_tmdbserieselectiveseasonsepisodestosql(lngid)
+                                                        finally:
+                                                            timelapsed = time.monotonic() - timstart
+                                                            lngchangesseasonsepisodestimebudget -= timelapsed
+                                                            print(f"Changes-53: series {lngid} seasons/episodes took {timelapsed:.1f}s; time budget remaining: {lngchangesseasonsepisodestimebudget:.1f}s")
                                                 except pymysql.MySQLError as e:
                                                     if cp.f_ismysqllocktimeout(e):
                                                         cp.f_handlemysqlerror(e, f"changes {inttmdbchanges} {strtmdbchanges} id {lngid}")
@@ -737,13 +789,19 @@ SET autocommit = 1; """
                 """
                 Process missing images for a given entity type.
 
+                Uses one LEFT JOIN per image field to find content rows whose
+                path is not yet recorded in the image table, then inserts only
+                those gaps. A progress heartbeat is emitted every 100 inserts
+                (i.e. only when the insert counter has actually moved).
+
                 Args:
                     config: Configuration dict with content_table, image_table, id_field, image_fields, language
                     cursor: Database cursor
                     intimageindex: Process index for logging
 
                 Returns:
-                    tuple: (lngcount, lnginsertcount) - number of records processed and images inserted
+                    tuple: (lngcount, lnginsertcount) - total non-deleted rows
+                    scanned in the content table and images inserted
                 """
                 strlang = config['language']
                 content_table = config['content_table']
@@ -751,53 +809,54 @@ SET autocommit = 1; """
                 id_field = config['id_field']
                 image_fields = config['image_fields']
 
-                # Check if language should be read from table
                 use_lang_from_table = (strlang == 'from_table')
                 lang_field = config.get('lang_field', 'LANG') if use_lang_from_table else None
 
-                # Build SELECT query with all image path fields
-                field_list = [id_field] + [field_name for field_name, _ in image_fields]
-                if use_lang_from_table:
-                    field_list.append(lang_field)
-                strsql = f"SELECT {', '.join(field_list)} FROM {content_table} WHERE DELETED = 0 ORDER BY {id_field}"
+                # Total rows in scope, used only for the final summary line.
+                cursor.execute(f"SELECT COUNT(*) AS cnt FROM {content_table} WHERE DELETED = 0")
+                lngcount = cursor.fetchone()['cnt']
 
-                cursor.execute(strsql)
-                results = cursor.fetchall()
-
-                lngcount = 0
                 lnginsertcount = 0
+                lnglastreported = 0
+                strentitylabel = content_table.lower().replace('t_wc_tmdb_', '')
 
-                for row in results:
-                    lngid = row[id_field]
+                for field_name, image_type in image_fields:
+                    # Find every content row whose image path is missing from the image table.
+                    strlangselect = f", c.{lang_field} AS ROW_LANG" if use_lang_from_table else ""
+                    strsqlgaps = f"""SELECT c.{id_field} AS id, c.{field_name} AS IMAGE_PATH{strlangselect}
+FROM {content_table} c
+LEFT JOIN {image_table} i
+  ON i.{id_field} = c.{id_field}
+ AND i.IMAGE_PATH = c.{field_name}
+ AND i.DELETED = 0
+WHERE c.DELETED = 0
+  AND c.{field_name} IS NOT NULL
+  AND c.{field_name} <> ''
+  AND i.ID_ROW IS NULL"""
+                    cursor.execute(strsqlgaps)
+                    gaps = cursor.fetchall()
+                    print(f"Found {len(gaps)} missing {image_type} entries in {content_table}")
 
-                    # Get language for this row (either from config or from table)
-                    if use_lang_from_table:
-                        row_lang = row.get(lang_field, 'en')  # Default to 'en' if LANG is null
-                    else:
-                        row_lang = strlang
+                    for row in gaps:
+                        lngid = row['id']
+                        image_path = row['IMAGE_PATH']
+                        if use_lang_from_table:
+                            row_lang = row.get('ROW_LANG') or 'en'
+                        else:
+                            row_lang = strlang
 
-                    # Process each image field for this record
-                    for field_name, image_type in image_fields:
-                        image_path = row[field_name]
+                        strsqlinsert = f"""INSERT INTO {image_table}
+                            ({id_field}, IMAGE_PATH, TYPE_IMAGE, DELETED, DISPLAY_ORDER, DAT_CREAT, TIM_UPDATED, LANG)
+                            VALUES (%s, %s, %s, 0, 0, NOW(), NOW(), %s)"""
+                        cursor.execute(strsqlinsert, (lngid, image_path, image_type, row_lang))
+                        lnginsertcount += 1
+                        print(f"Inserted missing {image_type} for {strentitylabel} {lngid}: {image_path} (lang: {row_lang})")
 
-                        if image_path and image_path != '':
-                            # Check if image already exists in image table
-                            strsqlcheck = f"SELECT ID_ROW FROM {image_table} WHERE {id_field} = %s AND IMAGE_PATH = %s AND DELETED = 0"
-                            cursor.execute(strsqlcheck, (lngid, image_path))
-
-                            if cursor.rowcount == 0:
-                                # Insert missing image
-                                strsqlinsert = f"""INSERT INTO {image_table}
-                                    ({id_field}, IMAGE_PATH, TYPE_IMAGE, DELETED, DISPLAY_ORDER, DAT_CREAT, TIM_UPDATED, LANG)
-                                    VALUES (%s, %s, %s, 0, 0, NOW(), NOW(), %s)"""
-                                cursor.execute(strsqlinsert, (lngid, image_path, image_type, row_lang))
-                                lnginsertcount += 1
-                                print(f"Inserted missing {image_type} for {content_table.lower().replace('t_wc_tmdb_', '')} {lngid}: {image_path} (lang: {row_lang})")
-
-                    lngcount += 1
-                    if lngcount % 100 == 0:
-                        conn.commit()
-                        print(f"Processed {lngcount} records, inserted {lnginsertcount} missing images")
+                        if lnginsertcount % 100 == 0:
+                            conn.commit()
+                            if lnginsertcount != lnglastreported:
+                                print(f"Inserted {lnginsertcount} missing images so far")
+                                lnglastreported = lnginsertcount
 
                 conn.commit()
                 return lngcount, lnginsertcount

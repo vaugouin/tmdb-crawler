@@ -9,7 +9,7 @@ else
     mkdir -p $HOME/docker/shared_data
     cd $HOME/docker/tmdb-crawler
     docker build -t tmdb-crawler-python-app .
-    # docker run -it --rm --network="host" --name tmdb-crawler -v $HOME/docker/shared_data:/shared tmdb-crawler-python-app
-    docker run -d --rm --network="host" --name tmdb-crawler -v $HOME/docker/shared_data:/shared tmdb-crawler-python-app
+    # docker run -it --rm --network="host" --name tmdb-crawler --env-file /home/debian/docker/tmdb-crawler/.env -v $HOME/docker/shared_data:/shared tmdb-crawler-python-app
+    docker run -d --rm --network="host" --name tmdb-crawler --env-file /home/debian/docker/tmdb-crawler/.env -v $HOME/docker/shared_data:/shared tmdb-crawler-python-app
     echo "tmdb-crawler Docker container started."
 fi

@@ -105,12 +105,14 @@ The crawler works with multiple MySQL tables including:
 ## Configuration
 
 ### Process Types
-The crawler supports 30+ different process types (indexed 1-33+), including:
-- **1-10**: Core content processing (movies, series, people)
-- **11-20**: Data refresh operations
-- **21-30**: Missing data recovery
-- **31-33**: Specialized processing for credits and keywords
-- **51-53**: Change processing for movies, people, and series
+The crawler runs ~30 numbered processes grouped by purpose:
+- **1-4, 12, 17-18**: Ingest new IDs from the daily TMDb export (collections, movies, persons, series, keywords, companies, networks)
+- **13**: Refresh saved lists
+- **14-16**: Mark/delete records whose IDs no longer appear in the TMDb export (movies, persons, series)
+- **22-28**: Refresh records older than 30 days (movies, persons, collections, companies, networks, series); **23** specifically fixes movies missing a Wikidata link
+- **31-33**: Recover entities referenced by credits but missing their own master record (persons, movies, series)
+- **51-53**: Apply incremental changes from the TMDb `/changes` API (movies, persons, series, including selective season/episode refresh)
+- **61-69**: Backfill missing image rows for each entity type (movie, person, serie, collection, company, network) and the per-language variants for movies, series, and collections
 
 ### Environment Variables
 The script relies on the `citizenphil` module for:
@@ -138,8 +140,11 @@ docker build -t tmdb-crawler-python-app .
 
 # Run the container
 docker run -d --rm --network="host" --name tmdb-crawler \
+  --env-file /home/debian/docker/tmdb-crawler/.env \
   -v $HOME/docker/shared_data:/shared tmdb-crawler-python-app
 ```
+
+Keep the runtime `.env` file outside the application source tree and pass it with Docker's `--env-file` option so local secrets are not included in the build context or image layers.
 
 ### Shell Script
 Use the provided `tmdb-crawler.sh` script to manage the Docker container:
@@ -151,7 +156,7 @@ Use the provided `tmdb-crawler.sh` script to manage the Docker container:
 The script will:
 - Check if the container is already running
 - Create necessary directories (`$HOME/docker/shared_data`)
-- Build and start the container if needed
+- Build and start the container with `/home/debian/docker/tmdb-crawler/.env` as the runtime env file if needed
 
 ## Data Flow
 
@@ -173,6 +178,7 @@ The script will:
 - **Rate Limiting**: Respects TMDb API rate limits
 - **Memory Management**: Processes large datasets in manageable chunks
 - **Progress Tracking**: Provides visibility into long-running operations
+- **Gap-Detection Queries**: The missing-image backfill (processes 61-69) uses a single `LEFT JOIN` per image field to find content rows whose path is not yet in the image table, rather than scanning every row and issuing a per-row existence check
 
 ## Monitoring
 
