@@ -20,8 +20,12 @@ Required privileges for MariaDB user:
 GRANT SELECT, INSERT, UPDATE, DELETE, ALTER
 ON your_database_name.*
 TO 'your_mysql_username'@'%';
-GRANT FILE ON *.* TO 'your_mysql_username'@'%';
 FLUSH PRIVILEGES;
+
+> **Note:** The crawler now uses `LOAD DATA LOCAL INFILE` (client-side stream), so
+> the `FILE` privilege is **no longer required**. Instead, `local_infile` must be
+> enabled on the **server** (`SET GLOBAL local_infile=1`, or `local_infile=ON` in
+> the MariaDB config); the client side is already enabled in the connection.
 
 1. **Create TMDb Tables**: Execute the `TMDb-tables.sql` script in your MariaDB/MySQL database to create all necessary tables and indexes.
    ```sql
@@ -66,7 +70,7 @@ The application requires database and API credentials to function:
 - **Missing Data Recovery**: Automatically fetches missing movies, series, and people referenced in existing data
 
 ### Database Operations
-- **Fast Bulk Import**: Uses MySQL's `LOAD DATA INFILE` for efficient data loading
+- **Fast Bulk Import**: Uses MySQL's `LOAD DATA LOCAL INFILE` (client-side stream) for efficient data loading
 - **Fallback Processing**: Alternative row-by-row processing when bulk import is unavailable
 - **Transaction Management**: Ensures data integrity with proper transaction handling
 - **Progress Tracking**: Maintains server variables to track processing status and counts
@@ -141,7 +145,7 @@ docker build -t tmdb-crawler-python-app .
 # Run the container
 docker run -d --rm --network="host" --name tmdb-crawler \
   --env-file /home/debian/docker/tmdb-crawler/.env \
-  -v $HOME/docker/shared_data:/shared tmdb-crawler-python-app
+  -v $HOME/docker/shared_data/tmdb-crawler:/shared tmdb-crawler-python-app
 ```
 
 Keep the runtime `.env` file outside the application source tree and pass it with Docker's `--env-file` option so local secrets are not included in the build context or image layers.
@@ -155,7 +159,7 @@ Use the provided `tmdb-crawler.sh` script to manage the Docker container:
 
 The script will:
 - Check if the container is already running
-- Create necessary directories (`$HOME/docker/shared_data`)
+- Create necessary directories (`$HOME/docker/shared_data/tmdb-crawler`)
 - Build and start the container with `/home/debian/docker/tmdb-crawler/.env` as the runtime env file if needed
 
 ## Data Flow
@@ -173,6 +177,7 @@ The script will:
 
 ## Performance Features
 
+- **Client-side Bulk Load**: ID-export files are loaded with `LOAD DATA LOCAL INFILE`, which streams the file from the crawler container to the server. The crawler reads its own files, so it only needs its dedicated `shared_data/tmdb-crawler` mount — MariaDB never needs filesystem access to `/shared`
 - **Optimized Queries**: Uses efficient SQL queries with proper indexing
 - **Batch Processing**: Groups API calls and database operations
 - **Rate Limiting**: Respects TMDb API rate limits
@@ -187,6 +192,29 @@ The crawler maintains several server variables for monitoring:
 - Record counts for each process type
 - Current operation status
 - Error tracking and recovery status
+
+### ID-export import health (per file)
+
+After each daily ID-export file is bulk-loaded, the crawler writes per-file server
+variables you can query to confirm the import worked (handy when checking the
+overnight run). For an export type `<type>` (`movie`, `person`, `collection`,
+`tv_series`, `keyword`, `tv_network`, `production_company`):
+
+- `strtmdbcrawlertmdbid<type>startdate` — when the download/import started
+- `strtmdbcrawlertmdbid<type>enddate` — when the import **succeeded** (only set on success)
+- `strtmdbcrawlertmdbid<type>count` — number of rows loaded into the import table,
+  or `FAILED` if the download failed
+
+A run is healthy when, for each type, `count` is a sane non-zero number and
+`enddate` ≥ `startdate`. Example check:
+
+```sql
+SELECT VAR_NAME, VAR_VALUE
+FROM T_WC_SERVER_VARIABLE
+WHERE DELETED = 0
+  AND VAR_NAME LIKE 'strtmdbcrawlertmdbid%count'
+ORDER BY VAR_NAME;
+```
 
 ## Error Handling
 
@@ -234,4 +262,4 @@ tmdb-crawler/
 - The crawler is timezone-aware and uses Paris timezone for all timestamps
 - Processing can be configured to run specific subsets of operations
 - The system maintains backward compatibility with existing database schemas
-- All file operations use the `/shared` volume for Docker container persistence
+- All file operations use the `/shared` volume (mapped to `shared_data/tmdb-crawler` on the host) for Docker container persistence; the downloaded export files are transient and removed after each import

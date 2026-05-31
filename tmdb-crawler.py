@@ -61,7 +61,7 @@ try:
                         strtmdbidsqltable = "T_WC_TMDB_MOVIE_ID_IMPORT"
                         inttruncate = True
                         intloaddatainfile = True
-                        strsqlload = f"""LOAD DATA INFILE '{strlocaljsonfilename}' 
+                        strsqlload = f"""LOAD DATA LOCAL INFILE '{strlocaljsonfilename}'
 INTO TABLE {strtmdbidsqltable} 
 FIELDS TERMINATED BY '\t' 
 LINES TERMINATED BY '\n' 
@@ -76,7 +76,7 @@ video = JSON_VALUE(@json_row, '$.video'); """
                         strtmdbidsqltable = "T_WC_TMDB_PERSON_ID_IMPORT"
                         inttruncate = True
                         intloaddatainfile = True
-                        strsqlload = f"""LOAD DATA INFILE '{strlocaljsonfilename}' 
+                        strsqlload = f"""LOAD DATA LOCAL INFILE '{strlocaljsonfilename}'
 INTO TABLE {strtmdbidsqltable} 
 FIELDS TERMINATED BY '\t' 
 LINES TERMINATED BY '\n' 
@@ -90,7 +90,7 @@ popularity = JSON_VALUE(@json_row, '$.popularity'); """
                         strtmdbidsqltable = "T_WC_TMDB_COLLECTION_ID_IMPORT"
                         inttruncate = True
                         intloaddatainfile = True
-                        strsqlload = f"""LOAD DATA INFILE '{strlocaljsonfilename}' 
+                        strsqlload = f"""LOAD DATA LOCAL INFILE '{strlocaljsonfilename}'
 INTO TABLE {strtmdbidsqltable} 
 FIELDS TERMINATED BY '\t' 
 LINES TERMINATED BY '\n' 
@@ -102,7 +102,7 @@ name = JSON_VALUE(@json_row, '$.name'); """
                         strtmdbidsqltable = "T_WC_TMDB_TV_SERIE_ID_IMPORT"
                         inttruncate = True
                         intloaddatainfile = True
-                        strsqlload = f"""LOAD DATA INFILE '{strlocaljsonfilename}' 
+                        strsqlload = f"""LOAD DATA LOCAL INFILE '{strlocaljsonfilename}'
 INTO TABLE {strtmdbidsqltable} 
 FIELDS TERMINATED BY '\t' 
 LINES TERMINATED BY '\n' 
@@ -114,7 +114,7 @@ popularity = JSON_VALUE(@json_row, '$.popularity'); """
                     elif inttmdbidfilename == 45:
                         strtmdbidsqltable = "T_WC_TMDB_KEYWORD_ID_IMPORT"
                         intloaddatainfile = True
-                        strsqlload = f"""LOAD DATA INFILE '{strlocaljsonfilename}' 
+                        strsqlload = f"""LOAD DATA LOCAL INFILE '{strlocaljsonfilename}'
 INTO TABLE {strtmdbidsqltable} 
 FIELDS TERMINATED BY '\t' 
 LINES TERMINATED BY '\n' 
@@ -126,7 +126,7 @@ name = JSON_VALUE(@json_row, '$.name'); """
                         strtmdbidsqltable = "T_WC_TMDB_TV_NETWORK_ID_IMPORT"
                         inttruncate = True
                         intloaddatainfile = True
-                        strsqlload = f"""LOAD DATA INFILE '{strlocaljsonfilename}' 
+                        strsqlload = f"""LOAD DATA LOCAL INFILE '{strlocaljsonfilename}'
 INTO TABLE {strtmdbidsqltable} 
 FIELDS TERMINATED BY '\t' 
 LINES TERMINATED BY '\n' 
@@ -138,7 +138,7 @@ name = JSON_VALUE(@json_row, '$.name'); """
                         strtmdbidsqltable = "T_WC_TMDB_PRODUCTION_COMPANY_ID_IMPORT"
                         inttruncate = True
                         intloaddatainfile = True
-                        strsqlload = f"""LOAD DATA INFILE '{strlocaljsonfilename}' 
+                        strsqlload = f"""LOAD DATA LOCAL INFILE '{strlocaljsonfilename}'
 INTO TABLE {strtmdbidsqltable} 
 FIELDS TERMINATED BY '\t' 
 LINES TERMINATED BY '\n' 
@@ -189,6 +189,13 @@ SET autocommit = 1; """
                                 for statement in strsqlafter.strip().split(';'):
                                     if statement.strip():
                                         cursor.execute(statement)
+                                # Record the loaded row count (confirmation for the
+                                # LOAD DATA LOCAL INFILE path, which otherwise wrote
+                                # no count/status server variable).
+                                cursor.execute(f"SELECT COUNT(*) AS cnt FROM {strtmdbidsqltable}")
+                                lngcount = cursor.fetchone()["cnt"]
+                                cp.f_setservervariable("strtmdbcrawlertmdbid"+strtmdbidfilename+"count",str(lngcount),"Record count of the TMDb "+strtmdbidfilename+" ID import file",0)
+                                print(f"Loaded {lngcount} rows into {strtmdbidsqltable}")
                             else:
                                 # Slow process without the LOAD DATA INFILE instruction
                                 with open(strlocaljsonfilename, 'r') as file:
@@ -230,6 +237,8 @@ SET autocommit = 1; """
                                     conn.commit()
                                     cp.f_setservervariable("strtmdbcrawlertmdbid"+strtmdbidfilename+"count",str(lngcount),"Record count of the TMDb "+strtmdbidfilename+" ID import file",0)
                             print(f"Import {strlocaljsonfilename} to {strtmdbidsqltable} done!")
+                            strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+                            cp.f_setservervariable("strtmdbcrawlertmdbid"+strtmdbidfilename+"enddate",strnow,"Date and time of the successful import of the TMDb "+strtmdbidfilename+" ID import file",0)
                             # File is read in the database so we delete it: .json.gz and .json file
                             print(f"Remove {strlocalgzfilename}")
                             os.remove(strlocalgzfilename)
@@ -238,6 +247,7 @@ SET autocommit = 1; """
                         else:
                             # Failed to download one file
                             print("Failed to download the file.")
+                            cp.f_setservervariable("strtmdbcrawlertmdbid"+strtmdbidfilename+"count","FAILED","Record count of the TMDb "+strtmdbidfilename+" ID import file",0)
                             intdownloadok = False
             if intdownloadok:
                 # All files were downloaded so we save the date and time of the last completed download of TMDb id import files
