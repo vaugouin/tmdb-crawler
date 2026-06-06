@@ -1,16 +1,18 @@
 """
-Run-once migration: pin each content's main image to DISPLAY_ORDER 0.
+Run-once migration: pin each content's main image(s) to DISPLAY_ORDER 0.
 
 For every TMDb image table this script enforces two invariants for the "main"
-image referenced by the master record (e.g. T_WC_TMDB_MOVIE.POSTER_PATH):
+image(s) referenced by the master record (e.g. T_WC_TMDB_MOVIE.POSTER_PATH) and
+by the per-language table when one exists (e.g. the French POSTER_PATH in
+T_WC_TMDB_MOVIE_LANG):
 
-  1. The main image always sits at DISPLAY_ORDER = 0.
-  2. The main image is never deleted: it is undeleted (DELETED = 0) and
+  1. Every main image always sits at DISPLAY_ORDER = 0 (both the base/English
+     image and each localized image).
+  2. Each main image is never deleted: it is undeleted (DELETED = 0) and
      inserted if it is missing from the image table entirely.
 
-It also frees position 0 for the main image by renumbering any *other*
-(non-main) row that currently occupies DISPLAY_ORDER 0 to the end of that
-content's ordering.
+It also frees position 0 by renumbering any *other* (non-main) row that
+currently occupies DISPLAY_ORDER 0 to the end of that content's ordering.
 
 The script is idempotent and safe to re-run. It is intended to be executed
 once inside the project's Docker container, e.g.:
@@ -28,8 +30,10 @@ import citizenphil as cp
 
 
 # Each entry describes one image table and the master column holding its main
-# image path. ``extra_fields`` lists additional NOT NULL id columns that must be
-# copied from the master table when inserting a missing main-image row.
+# image path. ``lang_table`` (optional) names a per-language table carrying the
+# same column for localized main images (keyed by id_field, with a LANG column).
+# ``extra_fields`` lists additional NOT NULL id columns that must be copied from
+# the source table when inserting a missing main-image row.
 IMAGE_TABLE_CONFIG = [
     {
         "master_table": "T_WC_TMDB_MOVIE",
@@ -38,6 +42,7 @@ IMAGE_TABLE_CONFIG = [
         "main_field": "POSTER_PATH",
         "main_type": "poster",
         "extra_fields": [],
+        "lang_table": "T_WC_TMDB_MOVIE_LANG",
     },
     {
         "master_table": "T_WC_TMDB_PERSON",
@@ -46,6 +51,7 @@ IMAGE_TABLE_CONFIG = [
         "main_field": "PROFILE_PATH",
         "main_type": "profile",
         "extra_fields": [],
+        "lang_table": None,
     },
     {
         "master_table": "T_WC_TMDB_SERIE",
@@ -54,6 +60,7 @@ IMAGE_TABLE_CONFIG = [
         "main_field": "POSTER_PATH",
         "main_type": "poster",
         "extra_fields": [],
+        "lang_table": "T_WC_TMDB_SERIE_LANG",
     },
     {
         "master_table": "T_WC_TMDB_COLLECTION",
@@ -62,6 +69,7 @@ IMAGE_TABLE_CONFIG = [
         "main_field": "POSTER_PATH",
         "main_type": "poster",
         "extra_fields": [],
+        "lang_table": "T_WC_TMDB_COLLECTION_LANG",
     },
     {
         "master_table": "T_WC_TMDB_COMPANY",
@@ -70,6 +78,7 @@ IMAGE_TABLE_CONFIG = [
         "main_field": "LOGO_PATH",
         "main_type": "logo",
         "extra_fields": [],
+        "lang_table": None,
     },
     {
         "master_table": "T_WC_TMDB_NETWORK",
@@ -78,6 +87,7 @@ IMAGE_TABLE_CONFIG = [
         "main_field": "LOGO_PATH",
         "main_type": "logo",
         "extra_fields": [],
+        "lang_table": None,
     },
     {
         "master_table": "T_WC_TMDB_SEASON",
@@ -86,6 +96,7 @@ IMAGE_TABLE_CONFIG = [
         "main_field": "POSTER_PATH",
         "main_type": "poster",
         "extra_fields": ["ID_SERIE"],
+        "lang_table": None,
     },
     {
         "master_table": "T_WC_TMDB_EPISODE",
@@ -94,27 +105,56 @@ IMAGE_TABLE_CONFIG = [
         "main_field": "STILL_PATH",
         "main_type": "still",
         "extra_fields": ["ID_SEASON", "ID_SERIE"],
+        "lang_table": None,
     },
 ]
+
+
+def f_main_image_sources(config):
+    """Return the list of (source_table, lang_sql) providing main image paths.
+
+    The master record always provides the base/English image. A per-language
+    table (when configured) provides localized images, tagged with its own LANG
+    column. ``lang_sql`` is the SQL expression used for the LANG value on insert.
+    """
+    sources = [(config["master_table"], "'en'")]
+    if config.get("lang_table"):
+        sources.append((config["lang_table"], "s.LANG"))
+    return sources
 
 
 def f_renumber_colliding_zero_rows(cursor, config):
     """Move non-main rows currently at DISPLAY_ORDER 0 to the end of their group.
 
-    Only content rows that actually have a main image are touched, so position 0
-    is freed precisely where the main image will be pinned. The new order value
-    is MAX(DISPLAY_ORDER) + ID_ROW, which is guaranteed to be unique within the
-    group and beyond every existing position.
+    A row is considered "main" when its TYPE_IMAGE matches and its IMAGE_PATH
+    matches the main path from any source (master or per-language). Only content
+    rows that actually have at least one main image are touched, so position 0 is
+    freed precisely where a main image will be pinned. The new order value is
+    MAX(DISPLAY_ORDER) + ID_ROW, unique within the group and beyond every
+    existing position.
     """
     image_table = config["image_table"]
-    master_table = config["master_table"]
     id_field = config["id_field"]
     main_field = config["main_field"]
     main_type = config["main_type"]
+    sources = f_main_image_sources(config)
+
+    # "This row is one of the main images" — path matches any source.
+    path_match = " OR ".join(
+        f"EXISTS (SELECT 1 FROM {src} s WHERE s.{id_field} = i.{id_field} "
+        f"AND s.{main_field} IS NOT NULL AND s.{main_field} <> '' "
+        f"AND i.IMAGE_PATH = s.{main_field})"
+        for src, _lang in sources
+    )
+    # "This content has at least one main image" — guard against pointless churn.
+    has_main = " OR ".join(
+        f"EXISTS (SELECT 1 FROM {src} s WHERE s.{id_field} = i.{id_field} "
+        f"AND s.{main_field} IS NOT NULL AND s.{main_field} <> '')"
+        for src, _lang in sources
+    )
 
     strsql = f"""
 UPDATE {image_table} i
-JOIN {master_table} m ON m.{id_field} = i.{id_field}
 JOIN (
     SELECT {id_field} AS gid, MAX(DISPLAY_ORDER) AS maxord
     FROM {image_table}
@@ -123,79 +163,83 @@ JOIN (
 SET i.DISPLAY_ORDER = g.maxord + i.ID_ROW,
     i.TIM_UPDATED = NOW()
 WHERE i.DISPLAY_ORDER = 0
-  AND m.{main_field} IS NOT NULL
-  AND m.{main_field} <> ''
-  AND NOT (i.TYPE_IMAGE = '{main_type}' AND i.IMAGE_PATH = m.{main_field})
+  AND ({has_main})
+  AND NOT (i.TYPE_IMAGE = '{main_type}' AND ({path_match}))
 """
     cursor.execute(strsql)
     return cursor.rowcount
 
 
-def f_pin_existing_main_image(cursor, config):
+def f_pin_existing_main_images(cursor, config):
     """Force every existing main-image row to DISPLAY_ORDER 0 and undelete it."""
     image_table = config["image_table"]
-    master_table = config["master_table"]
     id_field = config["id_field"]
     main_field = config["main_field"]
     main_type = config["main_type"]
 
-    strsql = f"""
+    total = 0
+    for src, _lang in f_main_image_sources(config):
+        strsql = f"""
 UPDATE {image_table} i
-JOIN {master_table} m ON m.{id_field} = i.{id_field}
+JOIN {src} s ON s.{id_field} = i.{id_field}
 SET i.DISPLAY_ORDER = 0,
     i.DELETED = 0,
     i.TIM_UPDATED = NOW()
-WHERE m.{main_field} IS NOT NULL
-  AND m.{main_field} <> ''
+WHERE s.{main_field} IS NOT NULL
+  AND s.{main_field} <> ''
   AND i.TYPE_IMAGE = '{main_type}'
-  AND i.IMAGE_PATH = m.{main_field}
+  AND i.IMAGE_PATH = s.{main_field}
 """
-    cursor.execute(strsql)
-    return cursor.rowcount
+        cursor.execute(strsql)
+        total += cursor.rowcount
+    return total
 
 
-def f_insert_missing_main_image(cursor, config):
-    """Insert the main image at DISPLAY_ORDER 0 when it is absent from the table."""
+def f_insert_missing_main_images(cursor, config):
+    """Insert each main image at DISPLAY_ORDER 0 when it is absent from the table."""
     image_table = config["image_table"]
-    master_table = config["master_table"]
     id_field = config["id_field"]
     main_field = config["main_field"]
     main_type = config["main_type"]
     extra_fields = config["extra_fields"]
 
     strextracols = "".join(f", {col}" for col in extra_fields)
-    strextraselect = "".join(f", m.{col}" for col in extra_fields)
+    strextraselect = "".join(f", s.{col}" for col in extra_fields)
 
-    strsql = f"""
+    total = 0
+    for src, lang_sql in f_main_image_sources(config):
+        strsql = f"""
 INSERT INTO {image_table}
     ({id_field}{strextracols}, IMAGE_PATH, TYPE_IMAGE, DISPLAY_ORDER, DELETED, DAT_CREAT, TIM_UPDATED, LANG)
-SELECT m.{id_field}{strextraselect}, m.{main_field}, '{main_type}', 0, 0, CURDATE(), NOW(), 'en'
-FROM {master_table} m
+SELECT s.{id_field}{strextraselect}, s.{main_field}, '{main_type}', 0, 0, CURDATE(), NOW(), {lang_sql}
+FROM {src} s
 LEFT JOIN {image_table} i
-  ON i.{id_field} = m.{id_field}
+  ON i.{id_field} = s.{id_field}
  AND i.TYPE_IMAGE = '{main_type}'
- AND i.IMAGE_PATH = m.{main_field}
-WHERE m.{main_field} IS NOT NULL
-  AND m.{main_field} <> ''
+ AND i.IMAGE_PATH = s.{main_field}
+WHERE s.{main_field} IS NOT NULL
+  AND s.{main_field} <> ''
   AND i.ID_ROW IS NULL
 """
-    cursor.execute(strsql)
-    return cursor.rowcount
+        cursor.execute(strsql)
+        total += cursor.rowcount
+    return total
 
 
 def f_process_table(connection, config):
     """Apply all three fixes to one image table inside a single transaction."""
     image_table = config["image_table"]
-    print(f"\n=== {image_table} ===")
+    langnote = f" (+ {config['lang_table']})" if config.get("lang_table") else ""
+    print(f"\n=== {image_table}{langnote} ===")
     cursor = connection.cursor()
 
     lngrenumbered = f_renumber_colliding_zero_rows(cursor, config)
     print(f"  Renumbered non-main rows away from position 0 : {lngrenumbered}")
 
-    lngpinned = f_pin_existing_main_image(cursor, config)
+    lngpinned = f_pin_existing_main_images(cursor, config)
     print(f"  Pinned existing main images to position 0      : {lngpinned}")
 
-    lnginserted = f_insert_missing_main_image(cursor, config)
+    lnginserted = f_insert_missing_main_images(cursor, config)
     print(f"  Inserted missing main images at position 0     : {lnginserted}")
 
     connection.commit()
