@@ -1373,12 +1373,6 @@ def f_tmdbmoviedelete(lngmovieid):
         cursor2.execute(strsqlupdate)
         connectioncp.commit()
         
-        strsqltablename = "T_WC_TMDB_MOVIE_LANG_META"
-        strsqlupdatecondition = f"ID_MOVIE = {lngmovieid}"
-        strsqlupdate = f"DELETE FROM {strsqltablename} WHERE {strsqlupdatecondition};"
-        cursor2.execute(strsqlupdate)
-        connectioncp.commit()
-        
         strsqltablename = "T_WC_TMDB_MOVIE_LIST"
         strsqlupdatecondition = f"ID_MOVIE = {lngmovieid}"
         strsqlupdate = f"DELETE FROM {strsqltablename} WHERE {strsqlupdatecondition};"
@@ -2324,13 +2318,7 @@ def f_tmdbseriedelete(lngserieid):
         strsqlupdate = f"DELETE FROM {strsqltablename} WHERE {strsqlupdatecondition};"
         cursor2.execute(strsqlupdate)
         connectioncp.commit()
-        """
-        strsqltablename = "T_WC_TMDB_SERIE_LANG_META"
-        strsqlupdatecondition = f"ID_SERIE = {lngserieid}"
-        strsqlupdate = f"DELETE FROM {strsqltablename} WHERE {strsqlupdatecondition};"
-        cursor2.execute(strsqlupdate)
-        connectioncp.commit()
-        """
+        
         strsqltablename = "T_WC_TMDB_SERIE_LIST"
         strsqlupdatecondition = f"ID_SERIE = {lngserieid}"
         strsqlupdate = f"DELETE FROM {strsqltablename} WHERE {strsqlupdatecondition};"
