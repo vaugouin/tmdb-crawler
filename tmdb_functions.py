@@ -3187,20 +3187,35 @@ def f_tmdbseasonimagestosql(lngserieid, lngseasonnumber):
 
     current_time = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
     current_date = datetime.now(paris_tz).strftime("%Y-%m-%d")
+
+    # Pin the season POSTER_PATH to DISPLAY_ORDER 0 and protect it from cleanup.
+    strmainimagepath = ""
+    cursormain = connectioncp.cursor()
+    cursormain.execute(f"SELECT POSTER_PATH AS MAIN_IMAGE_PATH FROM T_WC_TMDB_SEASON WHERE ID_SEASON = {lngseasonid}")
+    rowmain = cursormain.fetchone()
+    if rowmain is not None and rowmain.get('MAIN_IMAGE_PATH'):
+        strmainimagepath = rowmain['MAIN_IMAGE_PATH']
+
     all_image_paths = []
 
     def _store(image_array, image_type):
         lngdisplayorder = 0
+        boopintype = (strmainimagepath != "" and image_type == 'poster')
         for image in image_array or []:
-            lngdisplayorder += 1
             image_path = image.get('file_path', '')
             if not image_path:
                 continue
+            boothismain = boopintype and image_path == strmainimagepath
+            if boothismain:
+                lngthisdisplayorder = 0
+            else:
+                lngdisplayorder += 1
+                lngthisdisplayorder = lngdisplayorder
             all_image_paths.append(image_path)
             arrimage = {
                 "ID_SEASON": lngseasonid,
                 "ID_SERIE": lngserieid,
-                "DISPLAY_ORDER": lngdisplayorder,
+                "DISPLAY_ORDER": lngthisdisplayorder,
                 "DAT_CREAT": current_date,
                 "TIM_UPDATED": current_time,
                 "TYPE_IMAGE": image_type,
@@ -3212,6 +3227,8 @@ def f_tmdbseasonimagestosql(lngserieid, lngseasonnumber):
                 "VOTE_AVERAGE": image.get('vote_average', 0),
                 "VOTE_COUNT": image.get('vote_count', 0),
             }
+            if boothismain:
+                arrimage["DELETED"] = 0
             cp.f_sqlupdatearray(
                 "T_WC_TMDB_SEASON_IMAGE",
                 arrimage,
@@ -3222,6 +3239,27 @@ def f_tmdbseasonimagestosql(lngserieid, lngseasonnumber):
 
     _store(data.get('posters'), 'poster')
     _store(data.get('backdrops'), 'backdrop')
+
+    # Guarantee the season poster is present at DISPLAY_ORDER 0 even if the API
+    # did not return it, and shield it from the cleanup below.
+    if strmainimagepath and strmainimagepath not in all_image_paths:
+        all_image_paths.append(strmainimagepath)
+        cp.f_sqlupdatearray(
+            "T_WC_TMDB_SEASON_IMAGE",
+            {
+                "ID_SEASON": lngseasonid,
+                "ID_SERIE": lngserieid,
+                "DISPLAY_ORDER": 0,
+                "DELETED": 0,
+                "DAT_CREAT": current_date,
+                "TIM_UPDATED": current_time,
+                "TYPE_IMAGE": 'poster',
+                "IMAGE_PATH": strmainimagepath,
+            },
+            f"ID_SEASON = {lngseasonid} AND TYPE_IMAGE = 'poster' "
+            f"AND IMAGE_PATH = '{strmainimagepath}'",
+            1
+        )
 
     cursor = connectioncp.cursor()
     if all_image_paths:
@@ -3547,20 +3585,34 @@ def f_tmdbepisodeimagestosql(lngserieid, lngseasonnumber, lngepisodenumber):
 
     current_time = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
     current_date = datetime.now(paris_tz).strftime("%Y-%m-%d")
+
+    # Pin the episode STILL_PATH to DISPLAY_ORDER 0 and protect it from cleanup.
+    strmainimagepath = ""
+    cursormain = connectioncp.cursor()
+    cursormain.execute(f"SELECT STILL_PATH AS MAIN_IMAGE_PATH FROM T_WC_TMDB_EPISODE WHERE ID_EPISODE = {lngepisodeid}")
+    rowmain = cursormain.fetchone()
+    if rowmain is not None and rowmain.get('MAIN_IMAGE_PATH'):
+        strmainimagepath = rowmain['MAIN_IMAGE_PATH']
+
     all_image_paths = []
 
     lngdisplayorder = 0
     for image in (data.get('stills') or []):
-        lngdisplayorder += 1
         image_path = image.get('file_path', '')
         if not image_path:
             continue
+        boothismain = strmainimagepath != "" and image_path == strmainimagepath
+        if boothismain:
+            lngthisdisplayorder = 0
+        else:
+            lngdisplayorder += 1
+            lngthisdisplayorder = lngdisplayorder
         all_image_paths.append(image_path)
         arrimage = {
             "ID_EPISODE": lngepisodeid,
             "ID_SEASON": lngseasonid,
             "ID_SERIE": lngserieid,
-            "DISPLAY_ORDER": lngdisplayorder,
+            "DISPLAY_ORDER": lngthisdisplayorder,
             "DAT_CREAT": current_date,
             "TIM_UPDATED": current_time,
             "TYPE_IMAGE": 'still',
@@ -3572,11 +3624,35 @@ def f_tmdbepisodeimagestosql(lngserieid, lngseasonnumber, lngepisodenumber):
             "VOTE_AVERAGE": image.get('vote_average', 0),
             "VOTE_COUNT": image.get('vote_count', 0),
         }
+        if boothismain:
+            arrimage["DELETED"] = 0
         cp.f_sqlupdatearray(
             "T_WC_TMDB_EPISODE_IMAGE",
             arrimage,
             f"ID_EPISODE = {lngepisodeid} AND TYPE_IMAGE = 'still' "
             f"AND IMAGE_PATH = '{image_path}'",
+            1
+        )
+
+    # Guarantee the episode still is present at DISPLAY_ORDER 0 even if the API
+    # did not return it, and shield it from the cleanup below.
+    if strmainimagepath and strmainimagepath not in all_image_paths:
+        all_image_paths.append(strmainimagepath)
+        cp.f_sqlupdatearray(
+            "T_WC_TMDB_EPISODE_IMAGE",
+            {
+                "ID_EPISODE": lngepisodeid,
+                "ID_SEASON": lngseasonid,
+                "ID_SERIE": lngserieid,
+                "DISPLAY_ORDER": 0,
+                "DELETED": 0,
+                "DAT_CREAT": current_date,
+                "TIM_UPDATED": current_time,
+                "TYPE_IMAGE": 'still',
+                "IMAGE_PATH": strmainimagepath,
+            },
+            f"ID_EPISODE = {lngepisodeid} AND TYPE_IMAGE = 'still' "
+            f"AND IMAGE_PATH = '{strmainimagepath}'",
             1
         )
 
