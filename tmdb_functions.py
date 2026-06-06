@@ -114,7 +114,7 @@ def f_tmdbfetchjson(strtmdbapifullurl, strcontext):
     print(f"{strcontext} failed!")
     return None
 
-def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, strsqltablename, strkeyfieldname, strmainimagefield=None, strmainimagetype=None):
+def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, strsqltablename, strkeyfieldname, strmainimagefield=None, strmainimagetype=None, strlangtable=None):
     """
     Fetch images for content from TMDb API and store them in the database.
 
@@ -131,13 +131,19 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
     strkeyfieldname : str
         The primary key field name (e.g., 'ID_MOVIE')
     strmainimagefield : str, optional
-        Name of the column in strsqlmastertable holding the "main" image path
-        (e.g., 'POSTER_PATH'). When provided, that image is pinned to
+        Name of the column holding the "main" image path (e.g., 'POSTER_PATH').
+        When provided, every main image (the base/English image on the master
+        record plus any per-language images, see strlangtable) is pinned to
         DISPLAY_ORDER 0, inserted if the API did not return it, and never
         deleted by the obsolete-image cleanup.
     strmainimagetype : str, optional
         TYPE_IMAGE value for the main image (e.g., 'poster'). Required when
         strmainimagefield is set.
+    strlangtable : str, optional
+        Name of the per-language table (e.g., 'T_WC_TMDB_MOVIE_LANG') that holds
+        localized main image paths in the same strmainimagefield column, keyed by
+        strkeyfieldname with a LANG column. Each localized main image is also
+        pinned to DISPLAY_ORDER 0.
 
     Returns:
     --------
@@ -170,16 +176,23 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
     current_time = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
     current_date = datetime.now(paris_tz).strftime("%Y-%m-%d")
 
-    # Look up the designated "main" image path (e.g. the POSTER_PATH stored on
-    # the master record) so it can be pinned to DISPLAY_ORDER 0 and protected
-    # from the obsolete-image cleanup below.
-    strmainimagepath = ""
+    # Gather every "main" image path that must sit at DISPLAY_ORDER 0: the
+    # base/English image on the master record plus any localized images (e.g. the
+    # French POSTER_PATH stored in the *_LANG table). Mapped to their language so
+    # missing ones can be inserted with a sensible LANG value.
+    dctmainimages = {}
     if strmainimagefield:
         cursormain = connectioncp.cursor()
         cursormain.execute(f"SELECT {strmainimagefield} AS MAIN_IMAGE_PATH FROM {strsqlmastertable} WHERE {strkeyfieldname} = {lngcontentid}")
         rowmain = cursormain.fetchone()
         if rowmain is not None and rowmain.get('MAIN_IMAGE_PATH'):
-            strmainimagepath = rowmain['MAIN_IMAGE_PATH']
+            dctmainimages[rowmain['MAIN_IMAGE_PATH']] = 'en'
+        if strlangtable:
+            cursormain.execute(f"SELECT {strmainimagefield} AS MAIN_IMAGE_PATH, LANG FROM {strlangtable} WHERE {strkeyfieldname} = {lngcontentid}")
+            for rowlang in cursormain.fetchall():
+                strlangpath = rowlang.get('MAIN_IMAGE_PATH')
+                if strlangpath:
+                    dctmainimages.setdefault(strlangpath, rowlang.get('LANG') or '')
 
     # Track all image paths to clean up obsolete ones later
     all_image_paths = []
@@ -187,16 +200,16 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
     # Function to process image arrays (both backdrops and posters)
     def process_image_array(image_array, image_type):
         lngdisplayorder = 0
-        boopintype = (strmainimagepath != "" and image_type == strmainimagetype)
+        boopintype = (bool(dctmainimages) and image_type == strmainimagetype)
         for image in image_array:
             # Extract image data
             image_path = image.get('file_path', '')
             if not image_path:
                 continue
 
-            # The designated main image (e.g. POSTER_PATH) is pinned to
-            # DISPLAY_ORDER 0; all other images keep a 1-based ordering.
-            boothismain = boopintype and image_path == strmainimagepath
+            # Every main image (base + per-language) is pinned to DISPLAY_ORDER 0;
+            # all other images keep a 1-based ordering.
+            boothismain = boopintype and image_path in dctmainimages
             if boothismain:
                 lngthisdisplayorder = 0
             else:
@@ -244,11 +257,13 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
     if 'profiles' in data and data['profiles']:
         process_image_array(data['profiles'], 'profile')
 
-    # Guarantee the designated main image (e.g. POSTER_PATH) is always present at
+    # Guarantee every main image (base + per-language) is present at
     # DISPLAY_ORDER 0, even when the TMDb images endpoint did not return it.
-    # Adding it to all_image_paths also shields it from the cleanup below.
-    if strmainimagepath and strmainimagepath not in all_image_paths:
-        all_image_paths.append(strmainimagepath)
+    # Adding them to all_image_paths also shields them from the cleanup below.
+    for strmainpath, strmainlang in dctmainimages.items():
+        if strmainpath in all_image_paths:
+            continue
+        all_image_paths.append(strmainpath)
         arrmainimagedata = {
             strkeyfieldname: lngcontentid,
             "DISPLAY_ORDER": 0,
@@ -256,9 +271,10 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
             "DAT_CREAT": current_date,
             "TIM_UPDATED": current_time,
             "TYPE_IMAGE": strmainimagetype,
-            "IMAGE_PATH": strmainimagepath,
+            "IMAGE_PATH": strmainpath,
+            "LANG": strmainlang,
         }
-        strsqlupdatecondition = f"{strkeyfieldname} = {lngcontentid} AND TYPE_IMAGE = '{strmainimagetype}' AND IMAGE_PATH = '{strmainimagepath}'"
+        strsqlupdatecondition = f"{strkeyfieldname} = {lngcontentid} AND TYPE_IMAGE = '{strmainimagetype}' AND IMAGE_PATH = '{strmainpath}'"
         cp.f_sqlupdatearray(strsqltablename, arrmainimagedata, strsqlupdatecondition, 1)
 
     # Clean up obsolete images
@@ -1586,7 +1602,7 @@ def f_tmdbmovieimagestosql(lngmovieid):
     bool
         True if successful, False if failed
     """
-    f_tmdbcontentimagesstosql(lngmovieid, "movie", "T_WC_TMDB_MOVIE", "T_WC_TMDB_MOVIE_IMAGE", "ID_MOVIE", "POSTER_PATH", "poster")
+    f_tmdbcontentimagesstosql(lngmovieid, "movie", "T_WC_TMDB_MOVIE", "T_WC_TMDB_MOVIE_IMAGE", "ID_MOVIE", "POSTER_PATH", "poster", "T_WC_TMDB_MOVIE_LANG")
 
 def f_tmdbmovievideotosql(lngmovieid, strlang):
     """
@@ -2652,7 +2668,7 @@ def f_tmdbserieimagestosql(lngserieid):
     bool
         True if successful, False if failed
     """
-    f_tmdbcontentimagesstosql(lngserieid, "tv", "T_WC_TMDB_SERIE", "T_WC_TMDB_SERIE_IMAGE", "ID_SERIE", "POSTER_PATH", "poster")
+    f_tmdbcontentimagesstosql(lngserieid, "tv", "T_WC_TMDB_SERIE", "T_WC_TMDB_SERIE_IMAGE", "ID_SERIE", "POSTER_PATH", "poster", "T_WC_TMDB_SERIE_LANG")
 
 def f_tmdbserievideotosql(lngserieid, strlang):
     """
@@ -4287,7 +4303,7 @@ def f_tmdbcollectionimagestosql(lngcollectionid):
     bool
         True if successful, False if failed
     """
-    f_tmdbcontentimagesstosql(lngcollectionid, "collection", "T_WC_TMDB_COLLECTION", "T_WC_TMDB_COLLECTION_IMAGE", "ID_COLLECTION", "POSTER_PATH", "poster")
+    f_tmdbcontentimagesstosql(lngcollectionid, "collection", "T_WC_TMDB_COLLECTION", "T_WC_TMDB_COLLECTION_IMAGE", "ID_COLLECTION", "POSTER_PATH", "poster", "T_WC_TMDB_COLLECTION_LANG")
 
 def f_tmdbcollectiontosqleverything(lngcollectionid):
     """
