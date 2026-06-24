@@ -1774,7 +1774,12 @@ def f_tmdbserietosql(lngserieid):
             if 'external_ids' in data:
                 if 'wikidata_id' in data['external_ids']:
                     strserieidwikidata = data['external_ids']['wikidata_id']
-            
+
+            lngserieidtvdb = None
+            if 'external_ids' in data:
+                if data['external_ids'].get('tvdb_id'):
+                    lngserieidtvdb = data['external_ids']['tvdb_id']
+
             # Add TV-specific fields
             lngnumberofepisodes = 0
             if 'number_of_episodes' in data:
@@ -1983,7 +1988,11 @@ def f_tmdbserietosql(lngserieid):
                 arrseriecouples["ID_WIKIDATA"] = strserieidwikidata
             else:
                 arrseriecouples["ID_WIKIDATA"] = ""
-            
+
+            # ID_TVDB is an int column (mirrors SEASON/EPISODE); only set when present
+            if lngserieidtvdb:
+                arrseriecouples["ID_TVDB"] = lngserieidtvdb
+
             arrseriecouples["OVERVIEW"] = strserieoverview
             
             # Date fields

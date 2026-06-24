@@ -64,3 +64,6 @@ logs/
 *.temp
 
 citizenphilsecrets.py
+
+# Local Claude Code tooling (personal, not shared)
+.claude/

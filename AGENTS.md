@@ -25,6 +25,7 @@ Pipeline stages:
 - **Serving** — `fastapi-text2sql` (NL→SQL API + MCP server), `voice-agent`, `tmdb-front` (PHP web front-end).
 - **Evaluation** — `eval-text2sql`, `extract-movie-questions`.
 - **Maintenance & tooling** — `plex-duplicates`, `subtitle-translate`, `powershell`, `playwright-test`.
+- **Monitoring & observability** — `data-monitoring`.
 
 **This repository's role:** Acquisition stage and the primary data source. Synchronises movies, TV series, persons, collections, keywords, networks, and production companies from the TMDb API into the `T_WC_TMDB_*` tables that the rest of the pipeline builds on. Its keyword output feeds `keywords-processing`; its entity tables feed `tmdb-movie-preprocess` and `tmdb-person-preprocess`.
 
@@ -58,6 +59,26 @@ Full DDL lives under [doc/sql/](doc/sql/); do not duplicate table definitions he
 - [doc/sql/TMDb-tables.sql](doc/sql/TMDb-tables.sql) — upstream/source TMDb tables and reference tables.
 - [doc/sql/Wikidata-tables.sql](doc/sql/Wikidata-tables.sql) — Wikidata staging and canonical tables.
 - [doc/sql/Wikipedia-tables.sql](doc/sql/Wikipedia-tables.sql) — Wikipedia tables.
+
+---
+
+## Tracking / monitoring queries
+
+Curated, hand-written operational queries live in [doc/queries/](doc/queries/) (e.g.
+`monitoring.sql`) — kept **separate** from the auto-generated DDL dumps in `doc/sql/`.
+
+**Regular task — ship a tracking query with every new feature.** Whenever a change
+adds or starts populating a column, table, or pipeline output (a new external id, a
+new entity, a new completion flag, …), add a matching tracking query to
+`doc/queries/monitoring.sql` in the same change. The query should let an operator
+**verify the feature is working and measure coverage/progress** — typically a
+`COUNT(col)` fill rate vs `COUNT(*)`, or a per-`DAT_CREAT` collection-rate view.
+Prefer indexed columns so the query stays cheap, and add a one-line comment stating
+what it tracks, the backlog ref, and how to read a NULL/zero (often "upstream has no
+value", not a crawler miss). This is not optional polish — it is part of "done".
+
+Backlog refs: TMDB-CRAWLER-004 (origin of `doc/queries/`), TMDB-CRAWLER-005
+(`ID_TVDB` coverage across series/seasons/episodes).
 
 ---
 
@@ -95,5 +116,5 @@ This crawler is built and run as a Docker container via the repo's root `Dockerf
 
 ---
 
-**Last Updated**: 2026-06-03
+**Last Updated**: 2026-06-23
 **Current Version**: 1.0.0 

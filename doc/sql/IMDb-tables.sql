@@ -16,7 +16,7 @@ CREATE TABLE `T_WC_IMDB_MOVIE_AKA_IMPORT` (
   KEY `types` (`types`),
   KEY `attributes` (`attributes`),
   KEY `isOriginalTitle` (`isOriginalTitle`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -38,7 +38,7 @@ CREATE TABLE `T_WC_IMDB_MOVIE_BASIC_IMPORT` (
   KEY `startYear` (`startYear`),
   KEY `endYear` (`endYear`),
   KEY `runtimeMinutes` (`runtimeMinutes`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -54,7 +54,7 @@ CREATE TABLE `T_WC_IMDB_MOVIE_PRINCIPAL_IMPORT` (
   KEY `category` (`category`),
   KEY `job` (`job`),
   KEY `characters` (`characters`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -65,7 +65,7 @@ CREATE TABLE `T_WC_IMDB_MOVIE_RATING_IMPORT` (
   PRIMARY KEY (`tconst`),
   KEY `averageRating` (`averageRating`),
   KEY `numVotes` (`numVotes`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -82,7 +82,7 @@ CREATE TABLE `T_WC_IMDB_PERSON_BASIC_IMPORT` (
   KEY `deathYear` (`deathYear`),
   KEY `primaryProfession` (`primaryProfession`),
   KEY `knownForTitles` (`knownForTitles`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -93,7 +93,7 @@ CREATE TABLE `T_WC_IMDB_PERSON_MOVIE_IMPORT` (
   PRIMARY KEY (`tconst`),
   KEY `directors` (`directors`(768)),
   KEY `writers` (`writers`(768))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -106,5 +106,5 @@ CREATE TABLE `T_WC_IMDB_SERIE_EPISODE_IMPORT` (
   KEY `parentTconst` (`parentTconst`),
   KEY `seasonNumber` (`seasonNumber`),
   KEY `episodeNumber` (`episodeNumber`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
