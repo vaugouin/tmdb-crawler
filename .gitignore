@@ -67,3 +67,6 @@ citizenphilsecrets.py
 
 # Local Claude Code tooling (personal, not shared)
 .claude/
+
+# Claude Code / agent local tooling
+.agents/

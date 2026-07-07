@@ -1370,6 +1370,102 @@ def f_tmdbmoviekeywordstosql(lngmovieid):
                         strsqlupdatecondition = f"ID_MOVIE = {lngmovieid} AND ID_KEYWORD = {lngkeywordid}"
                         cp.f_sqlupdatearray(strsqltablename,arrmoviekeywordcouples,strsqlupdatecondition,1)
 
+def f_tmdbmoviesimilartosql(lngmovieid):
+    """
+    Fetch and store TMDb "similar" movies for a movie into T_WC_TMDB_MOVIE_SIMILAR.
+
+    Similar is TMDb's content-based set (genres + keywords). Only the neighbour ids
+    and their rank (DISPLAY_ORDER, page-1 order) are stored; titles/posters are
+    resolved later from T_WC_TMDB_MOVIE by the preprocess step (TMDB-MOVIE-PREPROCESS-027).
+    Neighbours are upserted per (ID_MOVIE, ID_MOVIE_SIMILAR), mirroring keywords.
+
+    Parameters:
+    -----------
+    lngmovieid : int
+        The TMDb movie ID to fetch similar movies for
+
+    Returns:
+    --------
+    None
+    """
+    global strtmdbapidomainurl
+    global headers
+
+    if lngmovieid > 0:
+        strtmdbapimoviesimilarurl = "3/movie/" + str(lngmovieid) + "/similar"
+        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimoviesimilarurl
+        jsonmoviesimilar = f_tmdbfetchjson(strtmdbapifullurl, f"f_tmdbmoviesimilartosql({lngmovieid})")
+        if jsonmoviesimilar is None:
+            return
+        else:
+            lngmoviesimilarstatuscode = 0
+            if 'status_code' in jsonmoviesimilar:
+                lngmoviesimilarstatuscode = jsonmoviesimilar['status_code']
+            if lngmoviesimilarstatuscode <= 1:
+                # API request result is not an error
+                lngsimilardisplayorder = 0
+                if 'results' in jsonmoviesimilar and jsonmoviesimilar['results']:
+                    # Array is not empty
+                    for onecontent in jsonmoviesimilar['results']:
+                        lngmovieidsimilar = onecontent['id']
+                        lngsimilardisplayorder = lngsimilardisplayorder + 1
+                        arrmoviesimilarcouples = {}
+                        arrmoviesimilarcouples["ID_MOVIE"] = lngmovieid
+                        arrmoviesimilarcouples["ID_MOVIE_SIMILAR"] = lngmovieidsimilar
+                        arrmoviesimilarcouples["DISPLAY_ORDER"] = lngsimilardisplayorder
+
+                        strsqltablename = "T_WC_TMDB_MOVIE_SIMILAR"
+                        strsqlupdatecondition = f"ID_MOVIE = {lngmovieid} AND ID_MOVIE_SIMILAR = {lngmovieidsimilar}"
+                        cp.f_sqlupdatearray(strsqltablename,arrmoviesimilarcouples,strsqlupdatecondition,1)
+
+def f_tmdbmovierecommendationstosql(lngmovieid):
+    """
+    Fetch and store TMDb "recommendations" for a movie into T_WC_TMDB_MOVIE_RECOMMENDATION.
+
+    Recommendations is TMDb's user/behaviour-based set (distinct from similar). Only
+    the neighbour ids and their rank (DISPLAY_ORDER, page-1 order) are stored; the
+    preprocess step (TMDB-MOVIE-PREPROCESS-027) resolves them to showable rows.
+    Neighbours are upserted per (ID_MOVIE, ID_MOVIE_RECOMMENDED), mirroring keywords.
+
+    Parameters:
+    -----------
+    lngmovieid : int
+        The TMDb movie ID to fetch recommendations for
+
+    Returns:
+    --------
+    None
+    """
+    global strtmdbapidomainurl
+    global headers
+
+    if lngmovieid > 0:
+        strtmdbapimovierecommendationsurl = "3/movie/" + str(lngmovieid) + "/recommendations"
+        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapimovierecommendationsurl
+        jsonmovierecommendations = f_tmdbfetchjson(strtmdbapifullurl, f"f_tmdbmovierecommendationstosql({lngmovieid})")
+        if jsonmovierecommendations is None:
+            return
+        else:
+            lngmovierecommendationsstatuscode = 0
+            if 'status_code' in jsonmovierecommendations:
+                lngmovierecommendationsstatuscode = jsonmovierecommendations['status_code']
+            if lngmovierecommendationsstatuscode <= 1:
+                # API request result is not an error
+                lngrecommendationdisplayorder = 0
+                if 'results' in jsonmovierecommendations and jsonmovierecommendations['results']:
+                    # Array is not empty
+                    for onecontent in jsonmovierecommendations['results']:
+                        lngmovieidrecommended = onecontent['id']
+                        lngrecommendationdisplayorder = lngrecommendationdisplayorder + 1
+                        arrmovierecommendationcouples = {}
+                        arrmovierecommendationcouples["ID_MOVIE"] = lngmovieid
+                        arrmovierecommendationcouples["ID_MOVIE_RECOMMENDED"] = lngmovieidrecommended
+                        arrmovierecommendationcouples["DISPLAY_ORDER"] = lngrecommendationdisplayorder
+
+                        strsqltablename = "T_WC_TMDB_MOVIE_RECOMMENDATION"
+                        strsqlupdatecondition = f"ID_MOVIE = {lngmovieid} AND ID_MOVIE_RECOMMENDED = {lngmovieidrecommended}"
+                        cp.f_sqlupdatearray(strsqltablename,arrmovierecommendationcouples,strsqlupdatecondition,1)
+
 def f_tmdbmovieexist(lngmovieid):
     """
     Check if a movie exists in the TMDb API.
@@ -1634,6 +1730,8 @@ def f_tmdbmovietosqleverything(lngmovieid):
     f_tmdbmoviesetcreditscompleted(lngmovieid)
     f_tmdbmoviekeywordstosql(lngmovieid)
     f_tmdbmoviesetkeywordscompleted(lngmovieid)
+    f_tmdbmoviesimilartosql(lngmovieid)
+    f_tmdbmovierecommendationstosql(lngmovieid)
     f_tmdbmovieimagestosql(lngmovieid)
     f_tmdbmovievideotosql(lngmovieid,'en')
     f_tmdbmovievideotosql(lngmovieid,'fr')

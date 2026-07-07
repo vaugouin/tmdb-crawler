@@ -76,7 +76,7 @@ The application requires database and API credentials to function:
 - **Progress Tracking**: Maintains server variables to track processing status and counts
 
 ### Content Types Supported
-- **Movies**: Complete movie data including metadata, credits, keywords, and images
+- **Movies**: Complete movie data including metadata, credits, keywords, images, and grounded neighbours (TMDb `similar` + `recommendations`)
 - **TV Series**: Series information with episode data, credits, and keywords
 - **People**: Person profiles with filmography and images
 - **Collections**: Movie collections and series groupings
@@ -105,6 +105,7 @@ The crawler works with multiple MySQL tables including:
 - `T_WC_TMDB_PERSON` - People records
 - `T_WC_TMDB_*_ID_IMPORT` - Temporary import tables
 - Various junction tables for relationships (credits, keywords, etc.)
+- `T_WC_TMDB_MOVIE_SIMILAR` / `T_WC_TMDB_MOVIE_RECOMMENDATION` - grounded neighbour lists per movie, from TMDb `/movie/{id}/similar` (content-based) and `/recommendations` (behaviour-based); populated during the full movie crawl, page-1 rank in `DISPLAY_ORDER` (backlog TMDB-CRAWLER-022)
 
 ## Configuration
 

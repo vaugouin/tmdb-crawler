@@ -71,3 +71,20 @@ SELECT 'EPISODE',
        COUNT(*), COUNT(ID_TVDB), COUNT(*) - COUNT(ID_TVDB),
        ROUND(100 * COUNT(ID_TVDB) / NULLIF(COUNT(*), 0), 1)
 FROM T_WC_TMDB_EPISODE;
+
+-- -----------------------------------------------------------------------------
+-- TMDB-CRAWLER-022 — grounded neighbour coverage (TMDb similar / recommendations).
+-- Reads: how many distinct source movies carry at least one stored neighbour, and
+-- the total neighbour rows, for each set. A movie with zero rows usually means TMDb
+-- returned no neighbours for it (a new / obscure title), not a crawler miss.
+-- Indexed on ID_MOVIE, so both scans stay cheap.
+-- -----------------------------------------------------------------------------
+SELECT 'MOVIE_SIMILAR'          AS SET_NAME,
+       COUNT(DISTINCT ID_MOVIE) AS SOURCE_MOVIES,
+       COUNT(*)                 AS NEIGHBOUR_ROWS
+FROM T_WC_TMDB_MOVIE_SIMILAR
+UNION ALL
+SELECT 'MOVIE_RECOMMENDATION',
+       COUNT(DISTINCT ID_MOVIE),
+       COUNT(*)
+FROM T_WC_TMDB_MOVIE_RECOMMENDATION;
