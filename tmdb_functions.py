@@ -2783,6 +2783,100 @@ def f_tmdbserievideotosql(lngserieid, strlang):
     """
     f_tmdbcontentvideosstosql(lngserieid, "tv", "T_WC_TMDB_SERIE", "T_WC_TMDB_SERIE_VIDEO", "ID_SERIE", strlang)
 
+def f_tmdbseriesimilartosql(lngserieid):
+    """
+    Fetch and store TMDb "similar" TV series for a series into T_WC_TMDB_SERIE_SIMILAR.
+
+    Series mirror of f_tmdbmoviesimilartosql (TMDB-CRAWLER-023). Similar is TMDb's
+    content-based set (genres + keywords). Only neighbour ids and their rank
+    (DISPLAY_ORDER, page-1 order) are stored, upserted per (ID_SERIE, ID_SERIE_SIMILAR).
+
+    Parameters:
+    -----------
+    lngserieid : int
+        The TMDb TV series ID to fetch similar series for
+
+    Returns:
+    --------
+    None
+    """
+    global strtmdbapidomainurl
+    global headers
+
+    if lngserieid > 0:
+        strtmdbapiseriesimilarurl = "3/tv/" + str(lngserieid) + "/similar"
+        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiseriesimilarurl
+        jsonseriesimilar = f_tmdbfetchjson(strtmdbapifullurl, f"f_tmdbseriesimilartosql({lngserieid})")
+        if jsonseriesimilar is None:
+            return
+        else:
+            lngseriesimilarstatuscode = 0
+            if 'status_code' in jsonseriesimilar:
+                lngseriesimilarstatuscode = jsonseriesimilar['status_code']
+            if lngseriesimilarstatuscode <= 1:
+                # API request result is not an error
+                lngsimilardisplayorder = 0
+                if 'results' in jsonseriesimilar and jsonseriesimilar['results']:
+                    # Array is not empty
+                    for onecontent in jsonseriesimilar['results']:
+                        lngserieidsimilar = onecontent['id']
+                        lngsimilardisplayorder = lngsimilardisplayorder + 1
+                        arrseriesimilarcouples = {}
+                        arrseriesimilarcouples["ID_SERIE"] = lngserieid
+                        arrseriesimilarcouples["ID_SERIE_SIMILAR"] = lngserieidsimilar
+                        arrseriesimilarcouples["DISPLAY_ORDER"] = lngsimilardisplayorder
+
+                        strsqltablename = "T_WC_TMDB_SERIE_SIMILAR"
+                        strsqlupdatecondition = f"ID_SERIE = {lngserieid} AND ID_SERIE_SIMILAR = {lngserieidsimilar}"
+                        cp.f_sqlupdatearray(strsqltablename,arrseriesimilarcouples,strsqlupdatecondition,1)
+
+def f_tmdbserierecommendationstosql(lngserieid):
+    """
+    Fetch and store TMDb "recommendations" for a TV series into T_WC_TMDB_SERIE_RECOMMENDATION.
+
+    Series mirror of f_tmdbmovierecommendationstosql (TMDB-CRAWLER-023). Recommendations
+    is TMDb's user/behaviour-based set. Only neighbour ids and their rank (DISPLAY_ORDER,
+    page-1 order) are stored, upserted per (ID_SERIE, ID_SERIE_RECOMMENDED).
+
+    Parameters:
+    -----------
+    lngserieid : int
+        The TMDb TV series ID to fetch recommendations for
+
+    Returns:
+    --------
+    None
+    """
+    global strtmdbapidomainurl
+    global headers
+
+    if lngserieid > 0:
+        strtmdbapiserierecommendationsurl = "3/tv/" + str(lngserieid) + "/recommendations"
+        strtmdbapifullurl = strtmdbapidomainurl + "/" + strtmdbapiserierecommendationsurl
+        jsonserierecommendations = f_tmdbfetchjson(strtmdbapifullurl, f"f_tmdbserierecommendationstosql({lngserieid})")
+        if jsonserierecommendations is None:
+            return
+        else:
+            lngserierecommendationsstatuscode = 0
+            if 'status_code' in jsonserierecommendations:
+                lngserierecommendationsstatuscode = jsonserierecommendations['status_code']
+            if lngserierecommendationsstatuscode <= 1:
+                # API request result is not an error
+                lngrecommendationdisplayorder = 0
+                if 'results' in jsonserierecommendations and jsonserierecommendations['results']:
+                    # Array is not empty
+                    for onecontent in jsonserierecommendations['results']:
+                        lngserieidrecommended = onecontent['id']
+                        lngrecommendationdisplayorder = lngrecommendationdisplayorder + 1
+                        arrserierecommendationcouples = {}
+                        arrserierecommendationcouples["ID_SERIE"] = lngserieid
+                        arrserierecommendationcouples["ID_SERIE_RECOMMENDED"] = lngserieidrecommended
+                        arrserierecommendationcouples["DISPLAY_ORDER"] = lngrecommendationdisplayorder
+
+                        strsqltablename = "T_WC_TMDB_SERIE_RECOMMENDATION"
+                        strsqlupdatecondition = f"ID_SERIE = {lngserieid} AND ID_SERIE_RECOMMENDED = {lngserieidrecommended}"
+                        cp.f_sqlupdatearray(strsqltablename,arrserierecommendationcouples,strsqlupdatecondition,1)
+
 def f_tmdbserietosqleverything(lngserieid):
     """
     Fetch and store complete TV series data including details, credits, keywords, images, and videos.
@@ -2801,6 +2895,8 @@ def f_tmdbserietosqleverything(lngserieid):
     f_tmdbseriesetcreditscompleted(lngserieid)
     f_tmdbseriekeywordstosql(lngserieid)
     f_tmdbseriesetkeywordscompleted(lngserieid)
+    f_tmdbseriesimilartosql(lngserieid)
+    f_tmdbserierecommendationstosql(lngserieid)
     f_tmdbserieimagestosql(lngserieid)
     f_tmdbserievideotosql(lngserieid,'en')
     f_tmdbserievideotosql(lngserieid,'fr')

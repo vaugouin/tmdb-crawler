@@ -73,18 +73,22 @@ SELECT 'EPISODE',
 FROM T_WC_TMDB_EPISODE;
 
 -- -----------------------------------------------------------------------------
--- TMDB-CRAWLER-022 — grounded neighbour coverage (TMDb similar / recommendations).
--- Reads: how many distinct source movies carry at least one stored neighbour, and
--- the total neighbour rows, for each set. A movie with zero rows usually means TMDb
--- returned no neighbours for it (a new / obscure title), not a crawler miss.
--- Indexed on ID_MOVIE, so both scans stay cheap.
+-- TMDB-CRAWLER-022 / -023 — grounded neighbour coverage (TMDb similar / recommendations),
+-- movies and TV series. Reads: how many distinct source entities carry at least one
+-- stored neighbour, and the total neighbour rows, per set. Zero rows for an entity
+-- usually means TMDb returned no neighbours (a new / obscure title), not a crawler
+-- miss. Indexed on ID_MOVIE / ID_SERIE, so all scans stay cheap.
 -- -----------------------------------------------------------------------------
 SELECT 'MOVIE_SIMILAR'          AS SET_NAME,
-       COUNT(DISTINCT ID_MOVIE) AS SOURCE_MOVIES,
+       COUNT(DISTINCT ID_MOVIE) AS SOURCE_ENTITIES,
        COUNT(*)                 AS NEIGHBOUR_ROWS
 FROM T_WC_TMDB_MOVIE_SIMILAR
 UNION ALL
-SELECT 'MOVIE_RECOMMENDATION',
-       COUNT(DISTINCT ID_MOVIE),
-       COUNT(*)
-FROM T_WC_TMDB_MOVIE_RECOMMENDATION;
+SELECT 'MOVIE_RECOMMENDATION', COUNT(DISTINCT ID_MOVIE), COUNT(*)
+FROM T_WC_TMDB_MOVIE_RECOMMENDATION
+UNION ALL
+SELECT 'SERIE_SIMILAR', COUNT(DISTINCT ID_SERIE), COUNT(*)
+FROM T_WC_TMDB_SERIE_SIMILAR
+UNION ALL
+SELECT 'SERIE_RECOMMENDATION', COUNT(DISTINCT ID_SERIE), COUNT(*)
+FROM T_WC_TMDB_SERIE_RECOMMENDATION;
