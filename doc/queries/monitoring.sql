@@ -92,3 +92,22 @@ FROM T_WC_TMDB_SERIE_SIMILAR
 UNION ALL
 SELECT 'SERIE_RECOMMENDATION', COUNT(DISTINCT ID_SERIE), COUNT(*)
 FROM T_WC_TMDB_SERIE_RECOMMENDATION;
+
+-- -----------------------------------------------------------------------------
+-- TMDB-CRAWLER-024 — localized main posters must sit at DISPLAY_ORDER 1, never 0.
+-- The base/English main poster stays at 0; each localized (non-en) main poster is
+-- pinned to 1. After the fix + backfill, AT_0 should be 0 and stay 0; a non-zero
+-- AT_0 that reappears means a fresh crawl re-pinned a localized poster at 0 (the
+-- regression to watch over time) — investigate f_tmdbcontentimagesstosql. AT_1 is
+-- the healthy count that grows as movies/series get re-crawled. Cheap (indexed on
+-- ID + DISPLAY_ORDER scan per entity).
+-- -----------------------------------------------------------------------------
+SELECT 'MOVIE' AS ENTITY,
+       SUM(TYPE_IMAGE = 'poster' AND DISPLAY_ORDER = 0 AND LANG NOT IN ('en','')) AS LOCALIZED_POSTERS_AT_0,
+       SUM(TYPE_IMAGE = 'poster' AND DISPLAY_ORDER = 1 AND LANG NOT IN ('en','')) AS LOCALIZED_POSTERS_AT_1
+FROM T_WC_TMDB_MOVIE_IMAGE
+UNION ALL
+SELECT 'SERIE',
+       SUM(TYPE_IMAGE = 'poster' AND DISPLAY_ORDER = 0 AND LANG NOT IN ('en','')),
+       SUM(TYPE_IMAGE = 'poster' AND DISPLAY_ORDER = 1 AND LANG NOT IN ('en',''))
+FROM T_WC_TMDB_SERIE_IMAGE;
