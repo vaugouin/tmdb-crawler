@@ -132,18 +132,18 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
         The primary key field name (e.g., 'ID_MOVIE')
     strmainimagefield : str, optional
         Name of the column holding the "main" image path (e.g., 'POSTER_PATH').
-        When provided, every main image (the base/English image on the master
-        record plus any per-language images, see strlangtable) is pinned to
-        DISPLAY_ORDER 0, inserted if the API did not return it, and never
-        deleted by the obsolete-image cleanup.
+        When provided, the base/English main image is pinned to DISPLAY_ORDER 0 and
+        each localized main image (see strlangtable) to DISPLAY_ORDER 1; all are
+        inserted if the API did not return them, and never deleted by the
+        obsolete-image cleanup.
     strmainimagetype : str, optional
         TYPE_IMAGE value for the main image (e.g., 'poster'). Required when
         strmainimagefield is set.
     strlangtable : str, optional
         Name of the per-language table (e.g., 'T_WC_TMDB_MOVIE_LANG') that holds
         localized main image paths in the same strmainimagefield column, keyed by
-        strkeyfieldname with a LANG column. Each localized main image is also
-        pinned to DISPLAY_ORDER 0.
+        strkeyfieldname with a LANG column. Each localized main image is pinned to
+        DISPLAY_ORDER 1 (present, but not stealing position 0 from the base image).
 
     Returns:
     --------
@@ -176,23 +176,24 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
     current_time = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
     current_date = datetime.now(paris_tz).strftime("%Y-%m-%d")
 
-    # Gather every "main" image path that must sit at DISPLAY_ORDER 0: the
-    # base/English image on the master record plus any localized images (e.g. the
-    # French POSTER_PATH stored in the *_LANG table). Mapped to their language so
-    # missing ones can be inserted with a sensible LANG value.
+    # Gather every "main" image path and the DISPLAY_ORDER it must sit at: the
+    # base/English image on the master record is pinned to 0; each localized main
+    # image (e.g. the French POSTER_PATH in the *_LANG table) is pinned to 1 so it
+    # stays present (and cleanup-protected) without stealing position 0 from the
+    # canonical image. Value = {"lang": <code>, "order": 0|1}.
     dctmainimages = {}
     if strmainimagefield:
         cursormain = connectioncp.cursor()
         cursormain.execute(f"SELECT {strmainimagefield} AS MAIN_IMAGE_PATH FROM {strsqlmastertable} WHERE {strkeyfieldname} = {lngcontentid}")
         rowmain = cursormain.fetchone()
         if rowmain is not None and rowmain.get('MAIN_IMAGE_PATH'):
-            dctmainimages[rowmain['MAIN_IMAGE_PATH']] = 'en'
+            dctmainimages[rowmain['MAIN_IMAGE_PATH']] = {"lang": "en", "order": 0}
         if strlangtable:
             cursormain.execute(f"SELECT {strmainimagefield} AS MAIN_IMAGE_PATH, LANG FROM {strlangtable} WHERE {strkeyfieldname} = {lngcontentid}")
             for rowlang in cursormain.fetchall():
                 strlangpath = rowlang.get('MAIN_IMAGE_PATH')
                 if strlangpath:
-                    dctmainimages.setdefault(strlangpath, rowlang.get('LANG') or '')
+                    dctmainimages.setdefault(strlangpath, {"lang": rowlang.get('LANG') or '', "order": 1})
 
     # Track all image paths to clean up obsolete ones later
     all_image_paths = []
@@ -207,11 +208,12 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
             if not image_path:
                 continue
 
-            # Every main image (base + per-language) is pinned to DISPLAY_ORDER 0;
+            # The base/English main image sits at DISPLAY_ORDER 0; each localized main
+            # image is pinned to DISPLAY_ORDER 1 (present, but not stealing position 0);
             # all other images keep a 1-based ordering.
             boothismain = boopintype and image_path in dctmainimages
             if boothismain:
-                lngthisdisplayorder = 0
+                lngthisdisplayorder = dctmainimages[image_path]["order"]
             else:
                 lngdisplayorder += 1
                 lngthisdisplayorder = lngdisplayorder
@@ -257,22 +259,22 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
     if 'profiles' in data and data['profiles']:
         process_image_array(data['profiles'], 'profile')
 
-    # Guarantee every main image (base + per-language) is present at
-    # DISPLAY_ORDER 0, even when the TMDb images endpoint did not return it.
+    # Guarantee every main image is present even when the TMDb images endpoint did
+    # not return it: the base/English at DISPLAY_ORDER 0, each localized main at 1.
     # Adding them to all_image_paths also shields them from the cleanup below.
-    for strmainpath, strmainlang in dctmainimages.items():
+    for strmainpath, dctmaininfo in dctmainimages.items():
         if strmainpath in all_image_paths:
             continue
         all_image_paths.append(strmainpath)
         arrmainimagedata = {
             strkeyfieldname: lngcontentid,
-            "DISPLAY_ORDER": 0,
+            "DISPLAY_ORDER": dctmaininfo["order"],
             "DELETED": 0,
             "DAT_CREAT": current_date,
             "TIM_UPDATED": current_time,
             "TYPE_IMAGE": strmainimagetype,
             "IMAGE_PATH": strmainpath,
-            "LANG": strmainlang,
+            "LANG": dctmaininfo["lang"],
         }
         strsqlupdatecondition = f"{strkeyfieldname} = {lngcontentid} AND TYPE_IMAGE = '{strmainimagetype}' AND IMAGE_PATH = '{strmainpath}'"
         cp.f_sqlupdatearray(strsqltablename, arrmainimagedata, strsqlupdatecondition, 1)
