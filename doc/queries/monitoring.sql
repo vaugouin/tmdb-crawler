@@ -94,13 +94,16 @@ SELECT 'SERIE_RECOMMENDATION', COUNT(DISTINCT ID_SERIE), COUNT(*)
 FROM T_WC_TMDB_SERIE_RECOMMENDATION;
 
 -- -----------------------------------------------------------------------------
--- TMDB-CRAWLER-024 — localized main posters must sit at DISPLAY_ORDER 1, never 0.
--- The base/English main poster stays at 0; each localized (non-en) main poster is
--- pinned to 1. After the fix + backfill, AT_0 should be 0 and stay 0; a non-zero
--- AT_0 that reappears means a fresh crawl re-pinned a localized poster at 0 (the
--- regression to watch over time) — investigate f_tmdbcontentimagesstosql. AT_1 is
--- the healthy count that grows as movies/series get re-crawled. Cheap (indexed on
--- ID + DISPLAY_ORDER scan per entity).
+-- TMDB-CRAWLER-024/025 — no localized (non-en/'') poster may sit at DISPLAY_ORDER 0.
+-- Position 0 is reserved for the canonical en/'' poster. Two ways a localized poster
+-- reaches 0, both now closed: (a) -024 kept per-language (*_LANG) mains off 0 by pinning
+-- them to 1; (b) -025 additionally demotes a BASE poster that is itself localized — e.g.
+-- a French film whose canonical POSTER_PATH is a French-tagged image — to 1, leaving 0
+-- empty rather than nailing 'fr' there. After the fix + backfill, AT_0 should be 0 and
+-- stay 0; a non-zero AT_0 that reappears means a fresh crawl or a re-run of
+-- fix_main_image_display_order.py put a localized poster at 0 — investigate
+-- f_tmdbcontentimagesstosql. AT_1 is the healthy count that grows as entities get
+-- re-crawled. Cheap (indexed on ID + DISPLAY_ORDER scan per entity).
 -- -----------------------------------------------------------------------------
 SELECT 'MOVIE' AS ENTITY,
        SUM(TYPE_IMAGE = 'poster' AND DISPLAY_ORDER = 0 AND LANG NOT IN ('en','')) AS LOCALIZED_POSTERS_AT_0,

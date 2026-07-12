@@ -176,18 +176,22 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
     current_time = datetime.now(paris_tz).strftime("%Y-%m-%d %H:%M:%S")
     current_date = datetime.now(paris_tz).strftime("%Y-%m-%d")
 
-    # Gather every "main" image path and the DISPLAY_ORDER it must sit at: the
-    # base/English image on the master record is pinned to 0; each localized main
-    # image (e.g. the French POSTER_PATH in the *_LANG table) is pinned to 1 so it
-    # stays present (and cleanup-protected) without stealing position 0 from the
-    # canonical image. Value = {"lang": <code>, "order": 0|1}.
+    # Gather every "main" image path and the DISPLAY_ORDER it must sit at. Position 0
+    # is reserved for the canonical language-neutral / English image; each localized
+    # main image (e.g. the French POSTER_PATH in the *_LANG table) is pinned to 1 so it
+    # stays present (and cleanup-protected) without stealing position 0.
+    # The base image (master record) is a candidate for 0, but only if its OWN language
+    # is en/'' -- when the master poster is itself a localized (e.g. French) image it is
+    # demoted to 1 at insert time so no non-en/'' image ever nails position 0
+    # (TMDB-CRAWLER-025, follow-up to -024). Its language is only known from the API
+    # array, hence the deferred decision below. Value = {"lang", "order", "is_base"?}.
     dctmainimages = {}
     if strmainimagefield:
         cursormain = connectioncp.cursor()
         cursormain.execute(f"SELECT {strmainimagefield} AS MAIN_IMAGE_PATH FROM {strsqlmastertable} WHERE {strkeyfieldname} = {lngcontentid}")
         rowmain = cursormain.fetchone()
         if rowmain is not None and rowmain.get('MAIN_IMAGE_PATH'):
-            dctmainimages[rowmain['MAIN_IMAGE_PATH']] = {"lang": "en", "order": 0}
+            dctmainimages[rowmain['MAIN_IMAGE_PATH']] = {"lang": "en", "order": 0, "is_base": True}
         if strlangtable:
             cursormain.execute(f"SELECT {strmainimagefield} AS MAIN_IMAGE_PATH, LANG FROM {strlangtable} WHERE {strkeyfieldname} = {lngcontentid}")
             for rowlang in cursormain.fetchall():
@@ -208,12 +212,21 @@ def f_tmdbcontentimagesstosql(lngcontentid, strcontenttype, strsqlmastertable, s
             if not image_path:
                 continue
 
-            # The base/English main image sits at DISPLAY_ORDER 0; each localized main
-            # image is pinned to DISPLAY_ORDER 1 (present, but not stealing position 0);
-            # all other images keep a 1-based ordering.
+            # The canonical main image sits at DISPLAY_ORDER 0 only when its own language
+            # is en/''; each localized main image is pinned to DISPLAY_ORDER 1 (present,
+            # but not stealing position 0); all other images keep a 1-based ordering.
+            # A base main image that is itself localized (non-en/'', e.g. a French poster)
+            # is demoted to 1 too, so position 0 never carries a localized language
+            # (TMDB-CRAWLER-025). The base image's language is only knowable here, from
+            # the API row, not from the master table.
             boothismain = boopintype and image_path in dctmainimages
             if boothismain:
-                lngthisdisplayorder = dctmainimages[image_path]["order"]
+                dctmaininfo = dctmainimages[image_path]
+                strimagelang = image.get('iso_639_1') or ''
+                if dctmaininfo.get("is_base") and strimagelang not in ("en", ""):
+                    lngthisdisplayorder = 1
+                else:
+                    lngthisdisplayorder = dctmaininfo["order"]
             else:
                 lngdisplayorder += 1
                 lngthisdisplayorder = lngdisplayorder

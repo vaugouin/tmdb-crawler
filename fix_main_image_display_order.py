@@ -6,8 +6,11 @@ image(s) referenced by the master record (e.g. T_WC_TMDB_MOVIE.POSTER_PATH) and
 by the per-language table when one exists (e.g. the French POSTER_PATH in
 T_WC_TMDB_MOVIE_LANG):
 
-  1. Every main image always sits at DISPLAY_ORDER = 0 (both the base/English
-     image and each localized image).
+  1. The canonical main image sits at DISPLAY_ORDER = 0 only when its language is
+     en/'' ; a localized main image (each *_LANG entry, and a base image that is
+     itself non-en/'', e.g. a French poster) is pinned to DISPLAY_ORDER = 1 so it
+     stays present without nailing a localized language to position 0
+     (TMDB-CRAWLER-025, aligning this migration with the crawler's -024/-025 rule).
   2. Each main image is never deleted: it is undeleted (DELETED = 0) and
      inserted if it is missing from the image table entirely.
 
@@ -171,7 +174,12 @@ WHERE i.DISPLAY_ORDER = 0
 
 
 def f_pin_existing_main_images(cursor, config):
-    """Force every existing main-image row to DISPLAY_ORDER 0 and undelete it."""
+    """Pin each existing main-image row and undelete it.
+
+    The base (master) image goes to DISPLAY_ORDER 0 only when its own LANG is en/'';
+    a localized base image and every per-language (*_LANG) main image go to
+    DISPLAY_ORDER 1, so position 0 never carries a localized language.
+    """
     image_table = config["image_table"]
     id_field = config["id_field"]
     main_field = config["main_field"]
@@ -179,10 +187,14 @@ def f_pin_existing_main_images(cursor, config):
 
     total = 0
     for src, _lang in f_main_image_sources(config):
+        if src == config["master_table"]:
+            order_expr = "CASE WHEN i.LANG IN ('en', '') OR i.LANG IS NULL THEN 0 ELSE 1 END"
+        else:
+            order_expr = "1"
         strsql = f"""
 UPDATE {image_table} i
 JOIN {src} s ON s.{id_field} = i.{id_field}
-SET i.DISPLAY_ORDER = 0,
+SET i.DISPLAY_ORDER = {order_expr},
     i.DELETED = 0,
     i.TIM_UPDATED = NOW()
 WHERE s.{main_field} IS NOT NULL
@@ -196,7 +208,12 @@ WHERE s.{main_field} IS NOT NULL
 
 
 def f_insert_missing_main_images(cursor, config):
-    """Insert each main image at DISPLAY_ORDER 0 when it is absent from the table."""
+    """Insert each main image when it is absent from the table.
+
+    A missing base image is inserted at DISPLAY_ORDER 0 (LANG 'en'); a missing
+    per-language main image is inserted at DISPLAY_ORDER 1 (LANG from *_LANG), so
+    position 0 is never seeded with a localized language.
+    """
     image_table = config["image_table"]
     id_field = config["id_field"]
     main_field = config["main_field"]
@@ -208,10 +225,11 @@ def f_insert_missing_main_images(cursor, config):
 
     total = 0
     for src, lang_sql in f_main_image_sources(config):
+        lngorder = 0 if src == config["master_table"] else 1
         strsql = f"""
 INSERT INTO {image_table}
     ({id_field}{strextracols}, IMAGE_PATH, TYPE_IMAGE, DISPLAY_ORDER, DELETED, DAT_CREAT, TIM_UPDATED, LANG)
-SELECT s.{id_field}{strextraselect}, s.{main_field}, '{main_type}', 0, 0, CURDATE(), NOW(), {lang_sql}
+SELECT s.{id_field}{strextraselect}, s.{main_field}, '{main_type}', {lngorder}, 0, CURDATE(), NOW(), {lang_sql}
 FROM {src} s
 LEFT JOIN {image_table} i
   ON i.{id_field} = s.{id_field}
