@@ -822,6 +822,12 @@ SET autocommit = 1; """
                 use_lang_from_table = (strlang == 'from_table')
                 lang_field = config.get('lang_field', 'LANG') if use_lang_from_table else None
 
+                # A localized main image (from a *_LANG table, e.g. the French POSTER_PATH)
+                # is pinned to DISPLAY_ORDER 1, never 0: position 0 is reserved for the
+                # base/English image so no localized language ever nails position 0
+                # (TMDB-CRAWLER-025). Base backfills (language='en') keep DISPLAY_ORDER 0.
+                lngbackfillorder = 1 if use_lang_from_table else 0
+
                 # Total rows in scope, used only for the final summary line.
                 cursor.execute(f"SELECT COUNT(*) AS cnt FROM {content_table} WHERE DELETED = 0")
                 lngcount = cursor.fetchone()['cnt']
@@ -857,8 +863,8 @@ WHERE c.DELETED = 0
 
                         strsqlinsert = f"""INSERT INTO {image_table}
                             ({id_field}, IMAGE_PATH, TYPE_IMAGE, DELETED, DISPLAY_ORDER, DAT_CREAT, TIM_UPDATED, LANG)
-                            VALUES (%s, %s, %s, 0, 0, NOW(), NOW(), %s)"""
-                        cursor.execute(strsqlinsert, (lngid, image_path, image_type, row_lang))
+                            VALUES (%s, %s, %s, 0, %s, NOW(), NOW(), %s)"""
+                        cursor.execute(strsqlinsert, (lngid, image_path, image_type, lngbackfillorder, row_lang))
                         lnginsertcount += 1
                         print(f"Inserted missing {image_type} for {strentitylabel} {lngid}: {image_path} (lang: {row_lang})")
 
