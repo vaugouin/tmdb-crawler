@@ -400,8 +400,19 @@ SET autocommit = 1; """
 
             # Time budget (in seconds) for the f_tmdbserieselectiveseasonsepisodestosql calls
             # in process 28 (refreshing series) and in the tv/changes loop (changes 53).
-            # Tunable via server variable "strtmdbcrawlerseasonsepisodestimebudget".
+            # Tunable via server variable "strtmdbcrawlerseasonsepisodestimebudget": the value
+            # below is only the seed used the first time the variable does not exist yet.
+            strseasonsepisodestimebudgetdesc = "Time budget (seconds) for the seasons/episodes refresh in process 28 and changes-53"
             lngseasonsepisodestimebudgetdefault = 7200
+            strseasonsepisodestimebudget = cp.f_getservervariable("strtmdbcrawlerseasonsepisodestimebudget",0)
+            if strseasonsepisodestimebudget:
+                try:
+                    lngseasonsepisodestimebudgetdefault = float(strseasonsepisodestimebudget)
+                except ValueError:
+                    print(f"Invalid strtmdbcrawlerseasonsepisodestimebudget value '{strseasonsepisodestimebudget}', falling back to {lngseasonsepisodestimebudgetdefault}s")
+            else:
+                cp.f_setservervariable("strtmdbcrawlerseasonsepisodestimebudget",str(lngseasonsepisodestimebudgetdefault),strseasonsepisodestimebudgetdesc,0)
+            print(f"Seasons/episodes time budget: {float(lngseasonsepisodestimebudgetdefault):.0f}s")
             # Mutable container so f_executeprocessrow (nested fn) can deduct elapsed time
             # while f_runprocessscope reads the remaining value to decide when to stop.
             lngprocess28timebudgetremaining = [0.0]
@@ -468,12 +479,7 @@ SET autocommit = 1; """
                         strdescvarname = strdesc.replace(" ","")
                         print("strdescvarname", strdescvarname)
                         if intindex == 28:
-                            strbudget = cp.f_getservervariable("strtmdbcrawlerseasonsepisodestimebudget",0)
-                            if strbudget:
-                                lngprocess28timebudgetremaining[0] = float(strbudget)
-                            else:
-                                lngprocess28timebudgetremaining[0] = float(lngseasonsepisodestimebudgetdefault)
-                                cp.f_setservervariable("strtmdbcrawlerseasonsepisodestimebudget",str(lngseasonsepisodestimebudgetdefault),"Time budget (seconds) for the seasons/episodes refresh in process 28 and changes-53",0)
+                            lngprocess28timebudgetremaining[0] = float(lngseasonsepisodestimebudgetdefault)
                             print(f"Process 28: seasons/episodes time budget set to {lngprocess28timebudgetremaining[0]:.0f}s")
                         cursor.execute(strsql)
                         lngrowcount = cursor.rowcount
@@ -510,12 +516,7 @@ SET autocommit = 1; """
             #arrtmdbchanges = {0: 'nothing'}
             #if strnow.startswith("2026-04-20"):
             #    arrtmdbchanges = {0: 'nothing'}
-            strchangesbudget = cp.f_getservervariable("strtmdbcrawlerseasonsepisodestimebudget",0)
-            if strchangesbudget:
-                lngchangesseasonsepisodestimebudget = float(strchangesbudget)
-            else:
-                lngchangesseasonsepisodestimebudget = float(lngseasonsepisodestimebudgetdefault)
-                cp.f_setservervariable("strtmdbcrawlerseasonsepisodestimebudget",str(lngseasonsepisodestimebudgetdefault),"Time budget (seconds) for the seasons/episodes refresh in process 28 and changes-53",0)
+            lngchangesseasonsepisodestimebudget = float(lngseasonsepisodestimebudgetdefault)
             print(f"Changes loop: seasons/episodes time budget set to {lngchangesseasonsepisodestimebudget:.0f}s")
             for inttmdbchanges,strtmdbchanges in arrtmdbchanges.items():
                 strprocessesexecuted += str(inttmdbchanges) + ", "

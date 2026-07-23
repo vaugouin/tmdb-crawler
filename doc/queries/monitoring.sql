@@ -117,3 +117,17 @@ SELECT 'SERIE',
        SUM(TYPE_IMAGE = 'poster' AND DISPLAY_ORDER = 0 AND LANG NOT IN ('en','')),
        SUM(TYPE_IMAGE = 'poster' AND DISPLAY_ORDER = 1 AND LANG NOT IN ('en',''))
 FROM T_WC_TMDB_SERIE_IMAGE;
+
+-- -----------------------------------------------------------------------------
+-- Seasons/episodes time budget — the runtime knob for the
+-- f_tmdbserieselectiveseasonsepisodestosql calls in process 28 and changes-53.
+-- The crawler resolves it once per run from this server variable, seeding it with
+-- the in-code default (7200s) the first time the row does not exist. A NULL/empty
+-- result means the crawler has not run since the feature was added (not a fault);
+-- update VAR_VALUE to retune the budget without a redeploy — the next run picks it
+-- up. Cheap (single indexed VAR_NAME lookup).
+-- -----------------------------------------------------------------------------
+SELECT VAR_NAME, VAR_VALUE, LONG_DESC, TIM_UPDATED
+FROM T_WC_SERVER_VARIABLE
+WHERE DELETED = 0
+  AND VAR_NAME = 'strtmdbcrawlerseasonsepisodestimebudget';
