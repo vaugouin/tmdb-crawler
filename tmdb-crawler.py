@@ -412,7 +412,9 @@ SET autocommit = 1; """
                     print(f"Invalid strtmdbcrawlerseasonsepisodestimebudget value '{strseasonsepisodestimebudget}', falling back to {lngseasonsepisodestimebudgetdefault}s")
             else:
                 cp.f_setservervariable("strtmdbcrawlerseasonsepisodestimebudget",str(lngseasonsepisodestimebudgetdefault),strseasonsepisodestimebudgetdesc,0)
-            print(f"Seasons/episodes time budget: {float(lngseasonsepisodestimebudgetdefault):.0f}s")
+            # Initial budget kept aside so every "remaining" message can also show what it started from
+            lngseasonsepisodestimebudgetinitial = float(lngseasonsepisodestimebudgetdefault)
+            print(f"Seasons/episodes time budget: {lngseasonsepisodestimebudgetinitial:.0f}s")
             # Mutable container so f_executeprocessrow (nested fn) can deduct elapsed time
             # while f_runprocessscope reads the remaining value to decide when to stop.
             lngprocess28timebudgetremaining = [0.0]
@@ -436,7 +438,7 @@ SET autocommit = 1; """
                     finally:
                         timelapsed = time.monotonic() - timstart
                         lngprocess28timebudgetremaining[0] -= timelapsed
-                        print(f"Process 28: series {lngid} seasons/episodes took {timelapsed:.1f}s; time budget remaining: {lngprocess28timebudgetremaining[0]:.1f}s")
+                        print(f"Process 28: series {lngid} seasons/episodes took {timelapsed:.1f}s; time budget remaining: {lngprocess28timebudgetremaining[0]:.1f}s of {lngseasonsepisodestimebudgetinitial:.0f}s")
                 elif intindex in (17, 26):
                     tf.f_tmdbcompanytosqleverything(lngid)
                 elif intindex in (18, 27):
@@ -479,7 +481,7 @@ SET autocommit = 1; """
                         strdescvarname = strdesc.replace(" ","")
                         print("strdescvarname", strdescvarname)
                         if intindex == 28:
-                            lngprocess28timebudgetremaining[0] = float(lngseasonsepisodestimebudgetdefault)
+                            lngprocess28timebudgetremaining[0] = lngseasonsepisodestimebudgetinitial
                             print(f"Process 28: seasons/episodes time budget set to {lngprocess28timebudgetremaining[0]:.0f}s")
                         cursor.execute(strsql)
                         lngrowcount = cursor.rowcount
@@ -495,7 +497,7 @@ SET autocommit = 1; """
                             strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
                             cp.f_setservervariable("strtmdbcrawlerdatetime",strnow,"Date and time of the last crawled record using the TMDb API",0)
                             if intindex == 28 and lngprocess28timebudgetremaining[0] < 0:
-                                print(f"Process 28: time budget exhausted ({lngprocess28timebudgetremaining[0]:.1f}s remaining) after {lngcount} series. Stopping.")
+                                print(f"Process 28: time budget exhausted ({lngprocess28timebudgetremaining[0]:.1f}s remaining of {lngseasonsepisodestimebudgetinitial:.0f}s) after {lngcount} series. Stopping.")
                                 break
                     print("------------------------------------------")
                 return strprocessesexecuted
@@ -516,7 +518,7 @@ SET autocommit = 1; """
             #arrtmdbchanges = {0: 'nothing'}
             #if strnow.startswith("2026-04-20"):
             #    arrtmdbchanges = {0: 'nothing'}
-            lngchangesseasonsepisodestimebudget = float(lngseasonsepisodestimebudgetdefault)
+            lngchangesseasonsepisodestimebudget = lngseasonsepisodestimebudgetinitial
             print(f"Changes loop: seasons/episodes time budget set to {lngchangesseasonsepisodestimebudget:.0f}s")
             for inttmdbchanges,strtmdbchanges in arrtmdbchanges.items():
                 strprocessesexecuted += str(inttmdbchanges) + ", "
@@ -647,7 +649,7 @@ SET autocommit = 1; """
                                                 try:
                                                     tf.f_tmdbserietosqleverything(lngid)
                                                     if lngchangesseasonsepisodestimebudget <= 0:
-                                                        print(f"Skipping season/episode for series {lngid} because seasons/episodes time budget exhausted")
+                                                        print(f"Skipping season/episode for series {lngid} because seasons/episodes time budget exhausted ({lngchangesseasonsepisodestimebudget:.1f}s remaining of {lngseasonsepisodestimebudgetinitial:.0f}s)")
                                                     else:
                                                         timstart = time.monotonic()
                                                         try:
@@ -655,7 +657,7 @@ SET autocommit = 1; """
                                                         finally:
                                                             timelapsed = time.monotonic() - timstart
                                                             lngchangesseasonsepisodestimebudget -= timelapsed
-                                                            print(f"Changes-53: series {lngid} seasons/episodes took {timelapsed:.1f}s; time budget remaining: {lngchangesseasonsepisodestimebudget:.1f}s")
+                                                            print(f"Changes-53: series {lngid} seasons/episodes took {timelapsed:.1f}s; time budget remaining: {lngchangesseasonsepisodestimebudget:.1f}s of {lngseasonsepisodestimebudgetinitial:.0f}s")
                                                 except pymysql.MySQLError as e:
                                                     if cp.f_ismysqllocktimeout(e):
                                                         cp.f_handlemysqlerror(e, f"changes {inttmdbchanges} {strtmdbchanges} id {lngid}")
