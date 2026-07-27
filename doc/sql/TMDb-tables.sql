@@ -470,6 +470,29 @@ CREATE TABLE `T_WC_TMDB_GENRE_LANG` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `T_WC_TMDB_ID_NOT_FOUND` (
+  `ID_ROW` int(11) NOT NULL AUTO_INCREMENT,
+  `ENTITY_TYPE` varchar(20) NOT NULL,
+  `ID_ENTITY` int(11) NOT NULL,
+  `ATTEMPT_COUNT` int(11) DEFAULT NULL,
+  `TIM_FIRST_SEEN` datetime DEFAULT NULL,
+  `TIM_LAST_SEEN` datetime DEFAULT NULL,
+  `TIM_RETRY_AFTER` datetime DEFAULT NULL,
+  `LAST_CONTEXT` varchar(100) DEFAULT NULL,
+  `DELETED` int(5) DEFAULT NULL,
+  `DISPLAY_ORDER` int(5) DEFAULT NULL,
+  `ID_CREATOR` int(5) DEFAULT NULL,
+  `DAT_CREAT` date DEFAULT NULL,
+  `ID_OWNER` int(5) DEFAULT NULL,
+  `TIM_UPDATED` datetime DEFAULT NULL,
+  `ID_USER_UPDATED` int(5) DEFAULT NULL,
+  PRIMARY KEY (`ID_ROW`),
+  UNIQUE KEY `UK_TMDB_ID_NOT_FOUND` (`ENTITY_TYPE`,`ID_ENTITY`),
+  KEY `IDX_TMDB_ID_NOT_FOUND_RETRY` (`ENTITY_TYPE`,`TIM_RETRY_AFTER`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `T_WC_TMDB_KEYWORD` (
   `ID_KEYWORD` int(11) NOT NULL,
   `NAME` varchar(250) DEFAULT NULL,

@@ -41,6 +41,11 @@ try:
             cp.f_setservervariable("strtmdbcrawlertotalruntimeprevious",strtotalruntimeprevious,strtotalruntimedesc + " (previous execution)",0)
             strtotalruntime = "RUNNING"
             cp.f_setservervariable("strtmdbcrawlertotalruntime",strtotalruntime,strtotalruntimedesc,0)
+            # Ledger of the TMDb ids that answer 34, read by every process query and
+            # by the tosqleverything() chains (TMDB-CRAWLER-027). Created here so a
+            # fresh deployment does not need a manual migration, then loaded once.
+            tf.f_tmdbidnotfoundensuretable()
+            tf.f_tmdbidnotfoundload()
             # Which id files should we process from the TMDb HTTP server? 
             arrtmdbidfilename = {41: 'movie', 42:'person', 43:'collection', 44:'tv_series', 45: 'keyword', 46: 'tv_network', 47: 'production_company'}
             #arrtmdbidfilename = {45: 'keyword'}
@@ -253,6 +258,21 @@ SET autocommit = 1; """
                 # All files were downloaded so we save the date and time of the last completed download of TMDb id import files
                 cp.f_setservervariable("strtmdbcrawlertmdbidimportdate",strdattodayminus1,"Date of the last download of the TMDb ID import files",0)
             intdownloadok = False
+            def f_notfoundfilter(strentitytype, stridcolumn):
+                """
+                SQL clause excluding the ids TMDb already answered 34 for.
+
+                Without it, a dead id is reselected on every run: process 32 rebuilds
+                the same orphan list, the refresh processes come back every 30 days,
+                and each id costs a full "everything" chain of doomed API calls
+                (TMDB-CRAWLER-027). NOT EXISTS on the (ENTITY_TYPE, ID_ENTITY) unique
+                key keeps the lookup an index probe. TIM_RETRY_AFTER lets an id whose
+                window has expired come back for another try.
+                """
+                return (" AND NOT EXISTS (SELECT 1 FROM T_WC_TMDB_ID_NOT_FOUND NF "
+                        f"WHERE NF.ENTITY_TYPE = '{strentitytype}' AND NF.ID_ENTITY = {stridcolumn} "
+                        "AND NF.TIM_RETRY_AFTER > NOW()) ")
+
             def f_getprocesssql(intindex):
                 datnow = datetime.now(cp.paris_tz)
                 strcurrentprocess = ""
@@ -261,24 +281,28 @@ SET autocommit = 1; """
                     strcurrentprocess = f"{intindex}: processing new collections from TMDb ID files"
                     strsql += "SELECT id FROM T_WC_TMDB_COLLECTION_ID_IMPORT "
                     strsql += "WHERE id NOT IN (SELECT ID_COLLECTION FROM T_WC_TMDB_COLLECTION WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL) "
+                    strsql += f_notfoundfilter("collection", "T_WC_TMDB_COLLECTION_ID_IMPORT.id")
                     strsql += "ORDER BY id ASC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 2:
                     strcurrentprocess = f"{intindex}: processing new movies from TMDb ID files"
                     strsql += "SELECT id FROM T_WC_TMDB_MOVIE_ID_IMPORT "
                     strsql += "WHERE id NOT IN (SELECT ID_MOVIE FROM T_WC_TMDB_MOVIE WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL) "
+                    strsql += f_notfoundfilter("movie", "T_WC_TMDB_MOVIE_ID_IMPORT.id")
                     strsql += "ORDER BY popularity DESC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 3:
                     strcurrentprocess = f"{intindex}: processing new person from TMDb ID files"
                     strsql += "SELECT id FROM T_WC_TMDB_PERSON_ID_IMPORT "
                     strsql += "WHERE id NOT IN (SELECT ID_PERSON FROM T_WC_TMDB_PERSON WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL) "
+                    strsql += f_notfoundfilter("person", "T_WC_TMDB_PERSON_ID_IMPORT.id")
                     strsql += "ORDER BY popularity DESC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 4:
                     strcurrentprocess = f"{intindex}: processing new series from TMDb ID files"
                     strsql += "SELECT id FROM T_WC_TMDB_TV_SERIE_ID_IMPORT "
                     strsql += "WHERE id NOT IN (SELECT ID_SERIE FROM T_WC_TMDB_SERIE WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL) "
+                    strsql += f_notfoundfilter("serie", "T_WC_TMDB_TV_SERIE_ID_IMPORT.id")
                     strsql += "ORDER BY popularity DESC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 12:
@@ -294,36 +318,42 @@ SET autocommit = 1; """
                         strcurrentprocess = f"{intindex}: refreshing movies"
                         strsql += "SELECT T_WC_TMDB_MOVIE.ID_MOVIE AS id FROM T_WC_TMDB_MOVIE "
                         strsql += "WHERE T_WC_TMDB_MOVIE.TIM_UPDATED < '" + strdatjminus30 + "' "
+                        strsql += f_notfoundfilter("movie", "T_WC_TMDB_MOVIE.ID_MOVIE")
                         strsql += "ORDER BY T_WC_TMDB_MOVIE.TIM_UPDATED ASC "
                         strsql += "LIMIT 5000 "
                     elif intindex == 24:
                         strcurrentprocess = f"{intindex}: refreshing persons"
                         strsql += "SELECT T_WC_TMDB_PERSON.ID_PERSON AS id FROM T_WC_TMDB_PERSON "
                         strsql += "WHERE T_WC_TMDB_PERSON.TIM_UPDATED < '" + strdatjminus30 + "' "
+                        strsql += f_notfoundfilter("person", "T_WC_TMDB_PERSON.ID_PERSON")
                         strsql += "ORDER BY T_WC_TMDB_PERSON.TIM_UPDATED ASC "
                         strsql += "LIMIT 5000 "
                     elif intindex == 25:
                         strcurrentprocess = f"{intindex}: refreshing collections"
                         strsql += "SELECT T_WC_TMDB_COLLECTION.ID_COLLECTION AS id FROM T_WC_TMDB_COLLECTION "
                         strsql += "WHERE T_WC_TMDB_COLLECTION.TIM_UPDATED < '" + strdatjminus30 + "' "
+                        strsql += f_notfoundfilter("collection", "T_WC_TMDB_COLLECTION.ID_COLLECTION")
                         strsql += "ORDER BY T_WC_TMDB_COLLECTION.TIM_UPDATED ASC "
                         strsql += "LIMIT 5000 "
                     elif intindex == 26:
                         strcurrentprocess = f"{intindex}: refreshing companies"
                         strsql += "SELECT T_WC_TMDB_COMPANY.ID_COMPANY AS id FROM T_WC_TMDB_COMPANY "
                         strsql += "WHERE T_WC_TMDB_COMPANY.TIM_UPDATED < '" + strdatjminus30 + "' "
+                        strsql += f_notfoundfilter("company", "T_WC_TMDB_COMPANY.ID_COMPANY")
                         strsql += "ORDER BY T_WC_TMDB_COMPANY.TIM_UPDATED ASC "
                         strsql += "LIMIT 5000 "
                     elif intindex == 27:
                         strcurrentprocess = f"{intindex}: refreshing networks"
                         strsql += "SELECT T_WC_TMDB_NETWORK.ID_NETWORK AS id FROM T_WC_TMDB_NETWORK "
                         strsql += "WHERE T_WC_TMDB_NETWORK.TIM_UPDATED < '" + strdatjminus30 + "' "
+                        strsql += f_notfoundfilter("network", "T_WC_TMDB_NETWORK.ID_NETWORK")
                         strsql += "ORDER BY T_WC_TMDB_NETWORK.TIM_UPDATED ASC "
                         strsql += "LIMIT 5000 "
                     elif intindex == 28:
                         strcurrentprocess = f"{intindex}: refreshing series"
                         strsql += "SELECT T_WC_TMDB_SERIE.ID_SERIE AS id FROM T_WC_TMDB_SERIE "
                         strsql += "WHERE T_WC_TMDB_SERIE.TIM_UPDATED < '" + strdatjminus30 + "' "
+                        strsql += f_notfoundfilter("serie", "T_WC_TMDB_SERIE.ID_SERIE")
                         strsql += "ORDER BY T_WC_TMDB_SERIE.TIM_UPDATED ASC "
                         strsql += "LIMIT 5000 "
                 elif intindex == 23:
@@ -340,11 +370,14 @@ SET autocommit = 1; """
                         strsql += "WHERE T_WC_WIKIDATA_MOVIE_V1.ID_IMDB IS NOT NULL AND T_WC_WIKIDATA_MOVIE_V1.ID_IMDB <> '' AND T_WC_WIKIDATA_MOVIE_V1.ID_IMDB LIKE 'tt%' "
                         strsql += "AND T_WC_WIKIDATA_MOVIE_V1.ID_WIKIDATA <> T_WC_TMDB_MOVIE.ID_WIKIDATA "
                         strsql += "AND (T_WC_TMDB_MOVIE.ID_WIKIDATA IS NULL OR T_WC_TMDB_MOVIE.ID_WIKIDATA = '') "
+                        strsql += f_notfoundfilter("movie", "T_WC_TMDB_MOVIE.ID_MOVIE")
                         strsql += "ORDER BY T_WC_TMDB_MOVIE.ID_MOVIE ASC "
                 elif intindex == 13:
                     if strdattodayminus1 > strtmdbdatprev:
                         strcurrentprocess = f"{intindex}: refreshing lists"
                         strsql += "SELECT ID_LIST AS id, NAME FROM T_WC_TMDB_LIST "
+                        strsql += "WHERE 1 = 1 "
+                        strsql += f_notfoundfilter("list", "T_WC_TMDB_LIST.ID_LIST")
                 elif intindex == 14:
                     strcurrentprocess = f"{intindex}: processing deleted movies"
                     strsql += "SELECT ID_MOVIE as id "
@@ -370,12 +403,14 @@ SET autocommit = 1; """
                     strcurrentprocess = f"{intindex}: processing new companies from TMDb ID files"
                     strsql += "SELECT id FROM T_WC_TMDB_PRODUCTION_COMPANY_ID_IMPORT "
                     strsql += "WHERE id NOT IN (SELECT ID_COMPANY FROM T_WC_TMDB_COMPANY WHERE DELETED = 0) "
+                    strsql += f_notfoundfilter("company", "T_WC_TMDB_PRODUCTION_COMPANY_ID_IMPORT.id")
                     strsql += "ORDER BY id ASC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 18:
                     strcurrentprocess = f"{intindex}: processing new networks from TMDb ID files"
                     strsql += "SELECT id FROM T_WC_TMDB_TV_NETWORK_ID_IMPORT "
                     strsql += "WHERE id NOT IN (SELECT ID_NETWORK FROM T_WC_TMDB_NETWORK WHERE DELETED = 0) "
+                    strsql += f_notfoundfilter("network", "T_WC_TMDB_TV_NETWORK_ID_IMPORT.id")
                     strsql += "ORDER BY id ASC "
                     strsql += "LIMIT 20000 "
                 elif intindex == 31:
@@ -383,18 +418,21 @@ SET autocommit = 1; """
                     strsql += "SELECT DISTINCT ID_PERSON AS id "
                     strsql += "FROM T_WC_TMDB_PERSON_MOVIE "
                     strsql += "WHERE ID_PERSON NOT IN (SELECT ID_PERSON FROM T_WC_TMDB_PERSON) "
+                    strsql += f_notfoundfilter("person", "T_WC_TMDB_PERSON_MOVIE.ID_PERSON")
                     strsql += "ORDER BY ID_PERSON "
                 elif intindex == 32:
                     strcurrentprocess = f"{intindex}: processing movies found in movie credits but with no movie record"
                     strsql += "SELECT DISTINCT ID_MOVIE AS id "
                     strsql += "FROM T_WC_TMDB_PERSON_MOVIE "
                     strsql += "WHERE ID_MOVIE NOT IN (SELECT ID_MOVIE FROM T_WC_TMDB_MOVIE) "
+                    strsql += f_notfoundfilter("movie", "T_WC_TMDB_PERSON_MOVIE.ID_MOVIE")
                     strsql += "ORDER BY ID_MOVIE "
                 elif intindex == 33:
                     strcurrentprocess = f"{intindex}: processing series found in serie credits but with no serie record"
                     strsql += "SELECT DISTINCT ID_SERIE AS id "
                     strsql += "FROM T_WC_TMDB_PERSON_SERIE "
                     strsql += "WHERE ID_SERIE NOT IN (SELECT ID_SERIE FROM T_WC_TMDB_SERIE) "
+                    strsql += f_notfoundfilter("serie", "T_WC_TMDB_PERSON_SERIE.ID_SERIE")
                     strsql += "ORDER BY ID_SERIE "
                 return strcurrentprocess, strsql
 
@@ -428,10 +466,14 @@ SET autocommit = 1; """
                 elif intindex in (3, 24, 31):
                     tf.f_tmdbpersontosqleverything(lngid)
                 elif intindex in (4, 33):
-                    tf.f_tmdbserietosqleverything(lngid)
+                    if tf.f_tmdbserietosqleverything(lngid) != tf.INT_TMDB_FETCH_OK:
+                        # The series itself is gone or unreachable: its seasons and
+                        # episodes would answer 34 too (TMDB-CRAWLER-027).
+                        return
                     tf.f_tmdbserieselectiveseasonsepisodestosql(lngid)
                 elif intindex == 28:
-                    tf.f_tmdbserietosqleverything(lngid)
+                    if tf.f_tmdbserietosqleverything(lngid) != tf.INT_TMDB_FETCH_OK:
+                        return
                     timstart = time.monotonic()
                     try:
                         tf.f_tmdbserieselectiveseasonsepisodestosql(lngid)
@@ -647,7 +689,10 @@ SET autocommit = 1; """
                                                 #print("Not already retrieved so we have to update it from the TMDb API")
                                                 print(f"{strtmdbchanges} changed id: {lngid}")
                                                 try:
-                                                    tf.f_tmdbserietosqleverything(lngid)
+                                                    if tf.f_tmdbserietosqleverything(lngid) != tf.INT_TMDB_FETCH_OK:
+                                                        # Gone or unreachable: skip its seasons and episodes
+                                                        # rather than spend the budget on doomed calls.
+                                                        continue
                                                     if lngchangesseasonsepisodestimebudget <= 0:
                                                         print(f"Skipping season/episode for series {lngid} because seasons/episodes time budget exhausted ({lngchangesseasonsepisodestimebudget:.1f}s remaining of {lngseasonsepisodestimebudgetinitial:.0f}s)")
                                                     else:
@@ -912,6 +957,14 @@ WHERE c.DELETED = 0
 
             strcurrentprocess = ""
             cp.f_setservervariable("strtmdbcrawlercurrentprocess",strcurrentprocess,"Current process in the TMDb API crawler",0)
+            # Ledger health, watched from the server-variable dashboard: a sudden jump
+            # in the "new" counter means TMDb answered 34 on a batch of ids, which is
+            # worth a look before the widening retry windows hide them for months.
+            lngidnotfoundnew = tf.f_tmdbidnotfoundnewcount()
+            lngidnotfoundactive = tf.f_tmdbidnotfoundactivecount()
+            cp.f_setservervariable("strtmdbcrawleridnotfoundnewcount",str(lngidnotfoundnew),"Count of TMDb ids recorded as not found (status 34) during the last run",0)
+            cp.f_setservervariable("strtmdbcrawleridnotfoundactivecount",str(lngidnotfoundactive),"Count of TMDb ids currently skipped because they answered not found (status 34)",0)
+            print(f"TMDb not-found ledger: {lngidnotfoundnew} ids recorded this run, {lngidnotfoundactive} currently skipped")
             strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
             cp.f_setservervariable("strtmdbcrawlerenddatetime",strnow,"Date and time of the TMDb API crawler ending",0)
             # Calculate total runtime and convert to readable format

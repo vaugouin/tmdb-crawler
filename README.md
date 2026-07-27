@@ -218,10 +218,48 @@ WHERE DELETED = 0
 ORDER BY VAR_NAME;
 ```
 
+### Deleted TMDb ids (status 34)
+
+TMDb answers `status_code 34` ("The resource you requested could not be found")
+for the ids it has deleted or merged. Those ids used to be re-probed on every run:
+process 32 rebuilt the same list of orphan movie ids indefinitely, the 30-day
+refresh processes brought the same companies back, and each dead id cost a whole
+`f_tmdb<entity>tosqleverything()` chain — ten API calls for a movie, three of them
+printing `Error: API returned status code 34`.
+
+`T_WC_TMDB_ID_NOT_FOUND` now records them, one row per `(ENTITY_TYPE, ID_ENTITY)`:
+
+- the first 34 stops the chain immediately and logs a single line;
+- every process query excludes the ids whose `TIM_RETRY_AFTER` is still in the
+  future, so they cost nothing at all on the following runs;
+- the retry window widens at each confirmation (base delay × attempts), so an id
+  that TMDb restores later is eventually picked up again, and a successful fetch
+  removes it from the ledger;
+- the table is created by the crawler itself on startup, no manual migration.
+
+Two settings, seeded on first run and changeable without a redeploy:
+
+| Server variable | Default | Effect |
+| --- | --- | --- |
+| `strtmdbcrawleridnotfoundretrydays` | `7` | Base delay in days before a recorded id is probed again |
+| `strtmdbcrawleridnotfoundretrymaxfactor` | `26` | Cap on the multiplier, so at most 26 × 7 = 182 days |
+
+Two counters are written at the end of each run:
+`strtmdbcrawleridnotfoundnewcount` (ids recorded during this run) and
+`strtmdbcrawleridnotfoundactivecount` (ids currently skipped). A sudden jump in
+the first is the signal to look at: it means TMDb dropped a batch of ids, or
+answered 34 wrongly for a while. See the `TMDB-CRAWLER-027` queries in
+[doc/queries/monitoring.sql](doc/queries/monitoring.sql).
+
+Processes 14/15/16 (deleted movies/persons/series) still do their own existence
+check, and now answer from the ledger when it already knows the id is gone.
+
 ## Error Handling
 
 - **Database Rollback**: Automatic transaction rollback on MySQL errors
 - **API Retry Logic**: Handles temporary API failures gracefully
+- **Not-found short-circuit**: A `status_code 34` stops the entity chain at once and
+  is remembered in `T_WC_TMDB_ID_NOT_FOUND` instead of being retried every run
 - **Data Validation**: Ensures data integrity before database commits
 - **Logging**: Comprehensive logging for debugging and monitoring
 

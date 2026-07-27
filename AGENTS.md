@@ -82,6 +82,24 @@ Backlog refs: TMDB-CRAWLER-004 (origin of `doc/queries/`), TMDB-CRAWLER-005
 
 ---
 
+## Entity fetch outcomes (TMDB-CRAWLER-027)
+
+Every `f_tmdb<entity>tosql()` and `f_tmdb<entity>tosqleverything()` returns one of
+`INT_TMDB_FETCH_OK` / `INT_TMDB_FETCH_GONE` / `INT_TMDB_FETCH_ERROR`, never `None`.
+**Check the return value at any new call site**: a `GONE` (TMDb `status_code 34`)
+must stop the chain, not just the current call — that is what keeps a deleted id
+from costing ten doomed API calls per run.
+
+Dead ids are recorded in `T_WC_TMDB_ID_NOT_FOUND`, which the crawler **creates on
+startup** (`f_tmdbidnotfoundensuretable()`), so no manual migration is needed on the
+VPS; the canonical DDL is mirrored in `doc/sql/TMDb-tables.sql`. Any new process
+query that feeds the API from a DB list must append `f_notfoundfilter(<entity type>,
+<id column>)` before its `ORDER BY`, otherwise dead ids come back on every run. Entity
+type strings are `movie`, `person`, `serie`, `collection`, `company`, `network`,
+`list`.
+
+---
+
 ## SQL Object Naming Conventions
 
 - SQL table and column names are uppercase snake case, except legacy imported TMDb genre columns such as `id` and `name`.
