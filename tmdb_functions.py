@@ -1718,6 +1718,71 @@ def f_tmdbmoviekeywordstosql(lngmovieid):
                         strsqlupdatecondition = f"ID_MOVIE = {lngmovieid} AND ID_KEYWORD = {lngkeywordid}"
                         cp.f_sqlupdatearray(strsqltablename,arrmoviekeywordcouples,strsqlupdatecondition,1)
 
+def f_tmdbprunestaleneighbours(strsqltablename, strownercolumn, lngownerid, strneighbourcolumn, arrcurrentids):
+    """
+    Delete the neighbour rows TMDb no longer returns for one movie / series.
+
+    TMDB-CRAWLER-028. The four neighbour writers (movie/serie x similar/recommendations)
+    upsert one row per (owner, neighbour) and never removed anything, so each table held the
+    UNION of every top-20 TMDb had ever returned for a title, growing without bound. Measured
+    2026-07-28: T_WC_TMDB_MOVIE_SIMILAR 2 612 116 rows for 63 445 movies (41.2 each) and
+    T_WC_TMDB_SERIE_SIMILAR 862 314 rows for 17 290 series (49.9 each), while MAX(DISPLAY_ORDER)
+    is 20 in every one of them, proving a single page is ever fetched. Everything past twenty
+    neighbours was therefore accumulated history, roughly two million dead rows.
+
+    Worse than the volume: tmdb-movie-preprocess renumbers DISPLAY_ORDER with ROW_NUMBER() when
+    building the T2S read-model, so the bloat is invisible downstream and the rail reads as a
+    clean ranked list of hundreds of titles. It is not TMDb's current ranking, it is every past
+    rank-1 first, then every past rank-2, and so on.
+
+    This is the same idiom already used for images (see the "delete images that are no longer
+    present in the API response" pass): the freshest response is authoritative.
+
+    Deliberately DIFFERENT from the images pass on one point: an EMPTY current set deletes
+    NOTHING. The images code wipes the lot when the response carries none, which is right for
+    images; here the asymmetry of costs says otherwise. Keeping a stale list one more cycle
+    costs nothing, wiping a correct list because TMDb hiccuped and answered 200 with an empty
+    body costs a re-crawl of the whole catalogue. Callers must also only reach this after a
+    successful fetch, never on a fetch error.
+
+    Parameters:
+    -----------
+    strsqltablename : str
+        Neighbour table, e.g. "T_WC_TMDB_MOVIE_SIMILAR"
+    strownercolumn : str
+        Owner column, e.g. "ID_MOVIE"
+    lngownerid : int
+        The movie / series the neighbours belong to
+    strneighbourcolumn : str
+        Neighbour column, e.g. "ID_MOVIE_SIMILAR"
+    arrcurrentids : list
+        The neighbour ids TMDb returned on this pass. Empty means "do nothing".
+
+    Returns:
+    --------
+    int
+        Number of stale rows removed (0 when nothing to do or on error).
+    """
+    if not arrcurrentids:
+        return 0
+    try:
+        strcurrentids = ", ".join(str(int(lngid)) for lngid in arrcurrentids)
+        strsqldelete = (
+            f"DELETE FROM {strsqltablename} "
+            f"WHERE {strownercolumn} = {int(lngownerid)} "
+            f"AND {strneighbourcolumn} NOT IN ({strcurrentids})"
+        )
+        cursor = connectioncp.cursor()
+        cursor.execute(strsqldelete)
+        lngdeleted = cursor.rowcount
+        connectioncp.commit()
+        if lngdeleted and lngdeleted > 0:
+            print(f"{strsqltablename}: removed {lngdeleted} stale neighbour(s) for {strownercolumn} {lngownerid}")
+        return lngdeleted or 0
+    except Exception as err:
+        print(f"Could not prune stale neighbours in {strsqltablename} for {strownercolumn} {lngownerid}: {err}")
+        return 0
+
 def f_tmdbmoviesimilartosql(lngmovieid):
     """
     Fetch and store TMDb "similar" movies for a movie into T_WC_TMDB_MOVIE_SIMILAR.
@@ -1752,6 +1817,9 @@ def f_tmdbmoviesimilartosql(lngmovieid):
             if lngmoviesimilarstatuscode <= 1:
                 # API request result is not an error
                 lngsimilardisplayorder = 0
+                # TMDB-CRAWLER-028: the neighbour ids this pass saw, so the stale ones can be
+                # pruned once the writes are done.
+                arrcurrentneighbourids = []
                 if 'results' in jsonmoviesimilar and jsonmoviesimilar['results']:
                     # Array is not empty
                     for onecontent in jsonmoviesimilar['results']:
@@ -1765,6 +1833,11 @@ def f_tmdbmoviesimilartosql(lngmovieid):
                         strsqltablename = "T_WC_TMDB_MOVIE_SIMILAR"
                         strsqlupdatecondition = f"ID_MOVIE = {lngmovieid} AND ID_MOVIE_SIMILAR = {lngmovieidsimilar}"
                         cp.f_sqlupdatearray(strsqltablename,arrmoviesimilarcouples,strsqlupdatecondition,1)
+                        arrcurrentneighbourids.append(lngmovieidsimilar)
+                    # TMDB-CRAWLER-028: this response is authoritative, so whatever it no
+                    # longer lists is gone. Runs AFTER the upserts, never before: an
+                    # interrupted pass then leaves the old list intact rather than an empty one.
+                    f_tmdbprunestaleneighbours("T_WC_TMDB_MOVIE_SIMILAR", "ID_MOVIE", lngmovieid, "ID_MOVIE_SIMILAR", arrcurrentneighbourids)
 
 def f_tmdbmovierecommendationstosql(lngmovieid):
     """
@@ -1800,6 +1873,9 @@ def f_tmdbmovierecommendationstosql(lngmovieid):
             if lngmovierecommendationsstatuscode <= 1:
                 # API request result is not an error
                 lngrecommendationdisplayorder = 0
+                # TMDB-CRAWLER-028: the neighbour ids this pass saw, so the stale ones can be
+                # pruned once the writes are done.
+                arrcurrentneighbourids = []
                 if 'results' in jsonmovierecommendations and jsonmovierecommendations['results']:
                     # Array is not empty
                     for onecontent in jsonmovierecommendations['results']:
@@ -1813,6 +1889,11 @@ def f_tmdbmovierecommendationstosql(lngmovieid):
                         strsqltablename = "T_WC_TMDB_MOVIE_RECOMMENDATION"
                         strsqlupdatecondition = f"ID_MOVIE = {lngmovieid} AND ID_MOVIE_RECOMMENDED = {lngmovieidrecommended}"
                         cp.f_sqlupdatearray(strsqltablename,arrmovierecommendationcouples,strsqlupdatecondition,1)
+                        arrcurrentneighbourids.append(lngmovieidrecommended)
+                    # TMDB-CRAWLER-028: this response is authoritative, so whatever it no
+                    # longer lists is gone. Runs AFTER the upserts, never before: an
+                    # interrupted pass then leaves the old list intact rather than an empty one.
+                    f_tmdbprunestaleneighbours("T_WC_TMDB_MOVIE_RECOMMENDATION", "ID_MOVIE", lngmovieid, "ID_MOVIE_RECOMMENDED", arrcurrentneighbourids)
 
 def f_tmdbmovieexist(lngmovieid):
     """
@@ -3183,6 +3264,9 @@ def f_tmdbseriesimilartosql(lngserieid):
             if lngseriesimilarstatuscode <= 1:
                 # API request result is not an error
                 lngsimilardisplayorder = 0
+                # TMDB-CRAWLER-028: the neighbour ids this pass saw, so the stale ones can be
+                # pruned once the writes are done.
+                arrcurrentneighbourids = []
                 if 'results' in jsonseriesimilar and jsonseriesimilar['results']:
                     # Array is not empty
                     for onecontent in jsonseriesimilar['results']:
@@ -3196,6 +3280,11 @@ def f_tmdbseriesimilartosql(lngserieid):
                         strsqltablename = "T_WC_TMDB_SERIE_SIMILAR"
                         strsqlupdatecondition = f"ID_SERIE = {lngserieid} AND ID_SERIE_SIMILAR = {lngserieidsimilar}"
                         cp.f_sqlupdatearray(strsqltablename,arrseriesimilarcouples,strsqlupdatecondition,1)
+                        arrcurrentneighbourids.append(lngserieidsimilar)
+                    # TMDB-CRAWLER-028: this response is authoritative, so whatever it no
+                    # longer lists is gone. Runs AFTER the upserts, never before: an
+                    # interrupted pass then leaves the old list intact rather than an empty one.
+                    f_tmdbprunestaleneighbours("T_WC_TMDB_SERIE_SIMILAR", "ID_SERIE", lngserieid, "ID_SERIE_SIMILAR", arrcurrentneighbourids)
 
 def f_tmdbserierecommendationstosql(lngserieid):
     """
@@ -3230,6 +3319,9 @@ def f_tmdbserierecommendationstosql(lngserieid):
             if lngserierecommendationsstatuscode <= 1:
                 # API request result is not an error
                 lngrecommendationdisplayorder = 0
+                # TMDB-CRAWLER-028: the neighbour ids this pass saw, so the stale ones can be
+                # pruned once the writes are done.
+                arrcurrentneighbourids = []
                 if 'results' in jsonserierecommendations and jsonserierecommendations['results']:
                     # Array is not empty
                     for onecontent in jsonserierecommendations['results']:
@@ -3243,6 +3335,11 @@ def f_tmdbserierecommendationstosql(lngserieid):
                         strsqltablename = "T_WC_TMDB_SERIE_RECOMMENDATION"
                         strsqlupdatecondition = f"ID_SERIE = {lngserieid} AND ID_SERIE_RECOMMENDED = {lngserieidrecommended}"
                         cp.f_sqlupdatearray(strsqltablename,arrserierecommendationcouples,strsqlupdatecondition,1)
+                        arrcurrentneighbourids.append(lngserieidrecommended)
+                    # TMDB-CRAWLER-028: this response is authoritative, so whatever it no
+                    # longer lists is gone. Runs AFTER the upserts, never before: an
+                    # interrupted pass then leaves the old list intact rather than an empty one.
+                    f_tmdbprunestaleneighbours("T_WC_TMDB_SERIE_RECOMMENDATION", "ID_SERIE", lngserieid, "ID_SERIE_RECOMMENDED", arrcurrentneighbourids)
 
 def f_tmdbserietosqleverything(lngserieid):
     """

@@ -105,8 +105,8 @@ The crawler works with multiple MySQL tables including:
 - `T_WC_TMDB_PERSON` - People records
 - `T_WC_TMDB_*_ID_IMPORT` - Temporary import tables
 - Various junction tables for relationships (credits, keywords, etc.)
-- `T_WC_TMDB_MOVIE_SIMILAR` / `T_WC_TMDB_MOVIE_RECOMMENDATION` - grounded neighbour lists per movie, from TMDb `/movie/{id}/similar` (content-based) and `/recommendations` (behaviour-based); populated during the full movie crawl, page-1 rank in `DISPLAY_ORDER` (backlog TMDB-CRAWLER-022)
-- `T_WC_TMDB_SERIE_SIMILAR` / `T_WC_TMDB_SERIE_RECOMMENDATION` - same for TV series, from `/tv/{id}/similar` and `/tv/{id}/recommendations`, populated during the full series crawl (backlog TMDB-CRAWLER-023)
+- `T_WC_TMDB_MOVIE_SIMILAR` / `T_WC_TMDB_MOVIE_RECOMMENDATION` - grounded neighbour lists per movie, from TMDb `/movie/{id}/similar` (content-based) and `/recommendations` (behaviour-based); populated during the full movie crawl, page-1 rank in `DISPLAY_ORDER` (backlog TMDB-CRAWLER-022). **Only page 1 is ever fetched, so `DISPLAY_ORDER` never exceeds 20 and each refresh is authoritative**: since TMDB-CRAWLER-028 the neighbours TMDb no longer returns are deleted for that title (`f_tmdbprunestaleneighbours`), which is the same rule already applied to images. Before that fix these tables held the union of every top-20 ever returned and grew without bound, ~2 M dead rows measured on 2026-07-28; the historical backlog is purged separately (TMDB-CRAWLER-029).
+- `T_WC_TMDB_SERIE_SIMILAR` / `T_WC_TMDB_SERIE_RECOMMENDATION` - same for TV series, from `/tv/{id}/similar` and `/tv/{id}/recommendations`, populated during the full series crawl (backlog TMDB-CRAWLER-023). Same authoritative-refresh rule and same caveats as the movie tables above.
 
 ## Configuration
 
