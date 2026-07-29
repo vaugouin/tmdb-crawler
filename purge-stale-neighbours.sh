@@ -7,8 +7,12 @@
 # container and CMD are left untouched, same pattern as fix-main-image.sh.
 #
 # DEFAULT IS A DRY RUN: it measures and prints, it deletes nothing. Read the report, then
-# re-run with --apply. Run TMDB-CRAWLER-028 first and let it crawl for a few days, otherwise
-# the accumulation restarts at the next crawl and this purge has to be repeated for ever.
+# re-run with --apply.
+#
+# DEPLOY TMDB-CRAWLER-028 FIRST. The order matters, the delay does not: purge while the old
+# code is still crawling and the next crawl restarts the accumulation from scratch. Once -028
+# is deployed you can purge the same day. Worth checking the fix on one title first though:
+# House of the Dragon (94997) had 392 neighbours, it should fall to about 20 on its own.
 #
 #   ./purge-stale-neighbours.sh                 # dry run, safe
 #   ./purge-stale-neighbours.sh --apply         # actually delete

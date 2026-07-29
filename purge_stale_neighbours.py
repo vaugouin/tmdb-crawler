@@ -50,8 +50,18 @@ Deletes run in chunks of owner ids (``--chunk``, default 5000), one commit per c
 reasoning as the chunked passes in tmdb-movie-preprocess: these tables hold millions of
 rows and a single transaction would hold a write lock far too long.
 
-Run -028 first and let it crawl for a few days. Without it the accumulation restarts at the
-next crawl and this purge would have to be repeated for ever.
+DEPLOY -028 FIRST. The order matters, the delay does not: purging while the old code is
+still crawling gives you a clean database for a few hours, then the next crawl restarts the
+accumulation from scratch and the purge has to be repeated for ever. Bailing out a boat
+without plugging the leak. The two are otherwise independent, this script relies only on
+TIM_UPDATED, which the old code wrote too, so -028 can be deployed in the morning and this
+run in the afternoon.
+
+There IS one good reason to wait a little, and it is about trusting the fix rather than the
+purge: check that -028 actually works before an irreversible mass delete. That needs one
+title to have been re-crawled, not several days. House of the Dragon (ID_SERIE 94997) sat at
+392 neighbours on 2026-07-28 and is popular enough to be crawled often; if that count falls
+to around 20 on its own, -028 is doing its job.
 """
 
 import argparse
