@@ -108,11 +108,15 @@ The crawler works with multiple MySQL tables including:
 - `T_WC_TMDB_MOVIE_SIMILAR` / `T_WC_TMDB_MOVIE_RECOMMENDATION` - grounded neighbour lists per movie, from TMDb `/movie/{id}/similar` (content-based) and `/recommendations` (behaviour-based); populated during the full movie crawl, page-1 rank in `DISPLAY_ORDER` (backlog TMDB-CRAWLER-022). **Only page 1 is ever fetched, so `DISPLAY_ORDER` never exceeds 20 and each refresh is authoritative**: since TMDB-CRAWLER-028 the neighbours TMDb no longer returns are deleted for that title (`f_tmdbprunestaleneighbours`), which is the same rule already applied to images. Before that fix these tables held the union of every top-20 ever returned and grew without bound, ~2 M dead rows measured on 2026-07-28; the historical backlog is purged separately (TMDB-CRAWLER-029).
 - `T_WC_TMDB_SERIE_SIMILAR` / `T_WC_TMDB_SERIE_RECOMMENDATION` - same for TV series, from `/tv/{id}/similar` and `/tv/{id}/recommendations`, populated during the full series crawl (backlog TMDB-CRAWLER-023). Same authoritative-refresh rule and same caveats as the movie tables above.
 - `T_WC_TMDB_MOVIE_RELEASE_DATE` - every row returned by `/movie/{id}/release_dates`, including country, language, certification, note, exact source timestamp, normalized UTC datetime, release type, and descriptors. It is deliberately independent from `T_WC_TMDB_MOVIE.DAT_RELEASE`, whose established Movie Details retrieval is unchanged.
+- `T_WC_TMDB_WATCH_PROVIDER` - one identity row per TMDb `provider_id`; intrinsic name/logo fields are selected deterministically from the movie catalogue first, then the TV catalogue. Providers missing from both latest catalogues remain as `DELETED = 1` so an older work snapshot never loses its identity silently.
+- `T_WC_TMDB_WATCH_PROVIDER_CATALOG` / `T_WC_TMDB_WATCH_PROVIDER_REGION` - membership in the movie or TV provider catalogue and the provider's display priority by country. `T_WC_TMDB_WATCH_PROVIDER_CATALOG_STATE` records the successful timestamp and expected row counts for each whole-catalogue snapshot.
 - `T_WC_TMDB_MOVIE_WATCH_PROVIDER` / `T_WC_TMDB_SERIE_WATCH_PROVIDER` - TMDb/JustWatch availability by country, provider, and monetization type (`flatrate`, `free`, `ads`, `rent`, `buy`). The TMDb country link and crawl timestamp are retained for attribution and freshness.
 
-### Release-date and watch-provider snapshots
+### Release-date, provider-entity and work-provider snapshots
 
-The three additive tables and their completion columns are created by the crawler on startup and are also mirrored in `doc/sql/TMDb-tables.sql`. A structurally complete API response is authoritative, including an empty `results` collection: the crawler replaces that title's previous rows in one transaction and records a dedicated completion timestamp. Network errors, rate limits, API errors, malformed JSON, and incomplete payloads preserve the previous snapshot.
+All additive tables and completion/state rows are created by the crawler on startup and are also mirrored in `doc/sql/TMDb-tables.sql`. Process 19 reads `/watch/providers/movie` and `/watch/providers/tv` once per run. Each catalogue is validated completely before its membership and regional priorities are replaced in a transaction; the shared provider identity table is then rebuilt from both catalogue memberships. Movie values win deterministic name/logo conflicts, while the two source variants remain visible in `T_WC_TMDB_WATCH_PROVIDER_CATALOG` for monitoring. An empty global catalogue is treated as incomplete and preserves the previous one.
+
+Processes 34-36 keep a different replacement unit: one work. A structurally complete per-work API response is authoritative, including an empty `results` collection. The crawler replaces that title's previous rows in one transaction and records a dedicated completion timestamp. Network errors, rate limits, API errors, malformed JSON, incomplete payloads, and database failures preserve the previous snapshot.
 
 Watch-provider data comes from TMDb's JustWatch partnership. Any downstream display must attribute JustWatch and use the stored TMDb link. These rows describe the latest crawled streaming, rental, purchase, free, or ad-supported availability. They are not cinema venues, theatrical showtimes, or a guarantee of same-day availability. The normal title refresh is approximately every 30 days.
 
@@ -121,6 +125,7 @@ Watch-provider data comes from TMDb's JustWatch partnership. Any downstream disp
 ### Process Types
 The crawler runs ~30 numbered processes grouped by purpose:
 - **1-4, 12, 17-18**: Ingest new IDs from the daily TMDb export (collections, movies, persons, series, keywords, companies, networks)
+- **19**: Refresh the global movie and TV provider entity catalogues and their country-specific priorities; two API calls per crawler run
 - **13**: Refresh saved lists
 - **14-16**: Mark/delete records whose IDs no longer appear in the TMDb export (movies, persons, series)
 - **22-28**: Refresh records older than 30 days (movies, persons, collections, companies, networks, series); **23** specifically fixes movies missing a Wikidata link

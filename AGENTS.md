@@ -64,8 +64,8 @@ Full DDL lives under [doc/sql/](doc/sql/); do not duplicate table definitions he
 
 ## Tracking / monitoring queries
 
-Curated, hand-written operational queries live in [doc/queries/](doc/queries/) (e.g.
-`doc/sql/monitoring.sql`), alongside the auto-generated DDL dumps in the same folder.
+Curated, hand-written operational queries live in [doc/sql/](doc/sql/) (for example,
+`doc/sql/monitoring.sql`), alongside the auto-generated DDL dumps in that folder.
 
 **Regular task — ship a tracking query with every new feature.** Whenever a change
 adds or starts populating a column, table, or pipeline output (a new external id, a
@@ -77,7 +77,7 @@ Prefer indexed columns so the query stays cheap, and add a one-line comment stat
 what it tracks, the backlog ref, and how to read a NULL/zero (often "upstream has no
 value", not a crawler miss). This is not optional polish — it is part of "done".
 
-Backlog refs: TMDB-CRAWLER-004 (origin of `doc/queries/`), TMDB-CRAWLER-005
+Backlog refs: TMDB-CRAWLER-004 (origin of the monitoring file), TMDB-CRAWLER-005
 (`ID_TVDB` coverage across series/seasons/episodes).
 
 ---
@@ -111,6 +111,19 @@ one title's rows and completion marker in a single transaction. A complete empty
 malformed payload, incomplete country/provider entry, or database exception must
 leave the old snapshot intact. Watch-provider consumers must retain the TMDb link,
 show crawl freshness, and attribute JustWatch; these rows are not cinema showtimes.
+
+The provider catalogue is a separate entity-bearing snapshot. Process 19 fetches
+`/watch/providers/movie` and `/watch/providers/tv`; `T_WC_TMDB_WATCH_PROVIDER`
+owns stable identity (`ID_PROVIDER`, name, logo), while catalogue membership and
+country priority live in `T_WC_TMDB_WATCH_PROVIDER_CATALOG` and
+`T_WC_TMDB_WATCH_PROVIDER_REGION`; `T_WC_TMDB_WATCH_PROVIDER_CATALOG_STATE`
+records the successful snapshot time and expected row counts for each catalogue.
+The per-work movie/series tables remain the qualified associations and own
+country, monetization mode, TMDb link, response order and observation time. Never
+copy a country priority or work availability onto provider identity. Validate a
+whole catalogue before replacing that catalogue's membership/regions; an
+unexpectedly empty global catalogue is an error, unlike a valid empty per-work
+availability snapshot.
 
 ---
 

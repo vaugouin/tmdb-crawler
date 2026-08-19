@@ -46,9 +46,9 @@ try:
             # fresh deployment does not need a manual migration, then loaded once.
             tf.f_tmdbidnotfoundensuretable()
             tf.f_tmdbidnotfoundload()
-            # Additive release-date and watch-provider tables follow the same
-            # deployment model. When bootstrap fails, the crawler keeps serving
-            # its established processes and skips only the three backfills.
+            # Additive release-date, provider-entity and work-provider tables
+            # follow the same deployment model. When bootstrap fails, the crawler
+            # keeps serving established processes and skips only these additions.
             intavailabilitytablesready = tf.f_tmdbavailabilityensuretables()
             # Which id files should we process from the TMDb HTTP server? 
             arrtmdbidfilename = {41: 'movie', 42:'person', 43:'collection', 44:'tv_series', 45: 'keyword', 46: 'tv_network', 47: 'production_company'}
@@ -417,6 +417,12 @@ SET autocommit = 1; """
                     strsql += f_notfoundfilter("network", "T_WC_TMDB_TV_NETWORK_ID_IMPORT.id")
                     strsql += "ORDER BY id ASC "
                     strsql += "LIMIT 20000 "
+                elif intindex == 19:
+                    if not intavailabilitytablesready:
+                        strcurrentprocess = f"{intindex}: provider catalogue storage unavailable, collection skipped"
+                    else:
+                        strcurrentprocess = f"{intindex}: refreshing movie and TV watch-provider catalogues"
+                        strsql += "SELECT 1 AS id "
                 elif intindex == 31:
                     strcurrentprocess = f"{intindex}: processing persons found in movie credits but with no person record"
                     strsql += "SELECT DISTINCT ID_PERSON AS id "
@@ -500,11 +506,13 @@ SET autocommit = 1; """
                         return
                     tf.f_tmdbserieselectiveseasonsepisodestosql(lngid)
                 elif intindex == 34:
-                    tf.f_tmdbmoviereleasedatestosql(lngid)
+                    return tf.f_tmdbmoviereleasedatestosql(lngid)
                 elif intindex == 35:
-                    tf.f_tmdbmoviewatchproviderstosql(lngid)
+                    return tf.f_tmdbmoviewatchproviderstosql(lngid)
                 elif intindex == 36:
-                    tf.f_tmdbseriewatchproviderstosql(lngid)
+                    return tf.f_tmdbseriewatchproviderstosql(lngid)
+                elif intindex == 19:
+                    return tf.f_tmdbwatchprovidercatalogstosql()
                 elif intindex == 28:
                     if tf.f_tmdbserietosqleverything(lngid) != tf.INT_TMDB_FETCH_OK:
                         return
@@ -536,8 +544,8 @@ SET autocommit = 1; """
             def f_processrowwithmysqlguard(intindex, row, strdesc):
                 lngid = row['id']
                 try:
-                    f_executeprocessrow(intindex, row)
-                    return True
+                    intprocessresult = f_executeprocessrow(intindex, row)
+                    return intprocessresult is not False
                 except pymysql.MySQLError as e:
                     if cp.f_ismysqllocktimeout(e):
                         cp.f_handlemysqlerror(e, f"process {intindex} {strdesc} id {lngid}")
@@ -579,7 +587,7 @@ SET autocommit = 1; """
                 return strprocessesexecuted
 
             # Handling new content, missing content and refreshing some content (Loop #2)
-            arrprocessscope = {17: 'new companies', 18: 'new networks', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
+            arrprocessscope = {17: 'new companies', 18: 'new networks', 19: 'watch provider catalogues', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
             #if strnow.startswith("2026-04-20"):
             #    #arrprocessscope = {26: 'refreshing companies', 27: 'refreshing networks'}
             #    arrprocessscope = {0: 'nothing'}
