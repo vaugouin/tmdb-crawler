@@ -46,6 +46,10 @@ try:
             # fresh deployment does not need a manual migration, then loaded once.
             tf.f_tmdbidnotfoundensuretable()
             tf.f_tmdbidnotfoundload()
+            # Additive release-date and watch-provider tables follow the same
+            # deployment model. When bootstrap fails, the crawler keeps serving
+            # its established processes and skips only the three backfills.
+            intavailabilitytablesready = tf.f_tmdbavailabilityensuretables()
             # Which id files should we process from the TMDb HTTP server? 
             arrtmdbidfilename = {41: 'movie', 42:'person', 43:'collection', 44:'tv_series', 45: 'keyword', 46: 'tv_network', 47: 'production_company'}
             #arrtmdbidfilename = {45: 'keyword'}
@@ -434,6 +438,30 @@ SET autocommit = 1; """
                     strsql += "WHERE ID_SERIE NOT IN (SELECT ID_SERIE FROM T_WC_TMDB_SERIE) "
                     strsql += f_notfoundfilter("serie", "T_WC_TMDB_PERSON_SERIE.ID_SERIE")
                     strsql += "ORDER BY ID_SERIE "
+                elif intindex in (34, 35, 36):
+                    if not intavailabilitytablesready:
+                        strcurrentprocess = f"{intindex}: availability storage unavailable, backfill skipped"
+                    elif intindex == 34:
+                        strcurrentprocess = f"{intindex}: backfilling all movie release dates"
+                        strsql += "SELECT ID_MOVIE AS id FROM T_WC_TMDB_MOVIE "
+                        strsql += "WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL "
+                        strsql += "AND TIM_RELEASE_DATES_COMPLETED IS NULL "
+                        strsql += f_notfoundfilter("movie", "T_WC_TMDB_MOVIE.ID_MOVIE")
+                        strsql += "ORDER BY POPULARITY DESC, ID_MOVIE ASC LIMIT 5000 "
+                    elif intindex == 35:
+                        strcurrentprocess = f"{intindex}: backfilling movie watch providers"
+                        strsql += "SELECT ID_MOVIE AS id FROM T_WC_TMDB_MOVIE "
+                        strsql += "WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL "
+                        strsql += "AND TIM_WATCH_PROVIDERS_COMPLETED IS NULL "
+                        strsql += f_notfoundfilter("movie", "T_WC_TMDB_MOVIE.ID_MOVIE")
+                        strsql += "ORDER BY POPULARITY DESC, ID_MOVIE ASC LIMIT 5000 "
+                    elif intindex == 36:
+                        strcurrentprocess = f"{intindex}: backfilling series watch providers"
+                        strsql += "SELECT ID_SERIE AS id FROM T_WC_TMDB_SERIE "
+                        strsql += "WHERE DELETED = 0 AND TIM_CREDITS_COMPLETED IS NOT NULL "
+                        strsql += "AND TIM_WATCH_PROVIDERS_COMPLETED IS NULL "
+                        strsql += f_notfoundfilter("serie", "T_WC_TMDB_SERIE.ID_SERIE")
+                        strsql += "ORDER BY POPULARITY DESC, ID_SERIE ASC LIMIT 5000 "
                 return strcurrentprocess, strsql
 
             # Time budget (in seconds) for the f_tmdbserieselectiveseasonsepisodestosql calls
@@ -471,6 +499,12 @@ SET autocommit = 1; """
                         # episodes would answer 34 too (TMDB-CRAWLER-027).
                         return
                     tf.f_tmdbserieselectiveseasonsepisodestosql(lngid)
+                elif intindex == 34:
+                    tf.f_tmdbmoviereleasedatestosql(lngid)
+                elif intindex == 35:
+                    tf.f_tmdbmoviewatchproviderstosql(lngid)
+                elif intindex == 36:
+                    tf.f_tmdbseriewatchproviderstosql(lngid)
                 elif intindex == 28:
                     if tf.f_tmdbserietosqleverything(lngid) != tf.INT_TMDB_FETCH_OK:
                         return
@@ -950,7 +984,10 @@ WHERE c.DELETED = 0
                 print("------------------------------------------")
 
             # Now handling refreshing contents (Loop #5)
-            arrprocessscope = {22: 'refreshing movies', 28: 'refreshing series', 24: 'refreshing persons'}
+            # Backfills run after the normal 30-day refresh: titles refreshed in
+            # this pass already received the new snapshots and are therefore not
+            # selected a second time by processes 34-36.
+            arrprocessscope = {22: 'refreshing movies', 28: 'refreshing series', 24: 'refreshing persons', 34: 'movie release dates', 35: 'movie watch providers', 36: 'series watch providers'}
             #if strnow.startswith("2026-04-20"):
             #    arrprocessscope = {28: 'refreshing series', 24: 'refreshing persons'}
             strprocessesexecuted = f_runprocessscope(arrprocessscope, strprocessesexecuted)

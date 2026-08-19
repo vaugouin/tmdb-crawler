@@ -100,6 +100,20 @@ type strings are `movie`, `person`, `serie`, `collection`, `company`, `network`,
 
 ---
 
+## Additive release/watch snapshots (TMDB-CRAWLER-020 / -030)
+
+`T_WC_TMDB_MOVIE.DAT_RELEASE` remains owned by the established Movie Details path
+in `f_tmdbmovietosql()`. Never derive or overwrite it from `/release_dates`.
+Country-specific release events and movie/series watch providers are independent,
+authoritative snapshots. Build and validate every row in memory first, then replace
+one title's rows and completion marker in a single transaction. A complete empty
+`results` collection clears the old snapshot; a network/API error, rate limit,
+malformed payload, incomplete country/provider entry, or database exception must
+leave the old snapshot intact. Watch-provider consumers must retain the TMDb link,
+show crawl freshness, and attribute JustWatch; these rows are not cinema showtimes.
+
+---
+
 ## SQL Object Naming Conventions
 
 - SQL table and column names are uppercase snake case, except legacy imported TMDb genre columns such as `id` and `name`.
@@ -134,7 +148,7 @@ This crawler is built and run as a Docker container via the repo's root `Dockerf
 
 ---
 
-**Last Updated**: 2026-06-23
+**Last Updated**: 2026-08-19
 **Current Version**: 1.0.0 
 
 ## Backlog (Nestor second-brain)

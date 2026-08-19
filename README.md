@@ -76,8 +76,8 @@ The application requires database and API credentials to function:
 - **Progress Tracking**: Maintains server variables to track processing status and counts
 
 ### Content Types Supported
-- **Movies**: Complete movie data including metadata, credits, keywords, images, and grounded neighbours (TMDb `similar` + `recommendations`)
-- **TV Series**: Series information with episode data, credits, keywords, and grounded neighbours (TMDb `similar` + `recommendations`)
+- **Movies**: Complete movie data including metadata, credits, keywords, images, grounded neighbours, every country-specific release event, and watch-provider snapshots
+- **TV Series**: Series information with episode data, credits, keywords, grounded neighbours, and watch-provider snapshots
 - **People**: Person profiles with filmography and images
 - **Collections**: Movie collections and series groupings
 - **Keywords**: Content tagging and categorization
@@ -107,6 +107,14 @@ The crawler works with multiple MySQL tables including:
 - Various junction tables for relationships (credits, keywords, etc.)
 - `T_WC_TMDB_MOVIE_SIMILAR` / `T_WC_TMDB_MOVIE_RECOMMENDATION` - grounded neighbour lists per movie, from TMDb `/movie/{id}/similar` (content-based) and `/recommendations` (behaviour-based); populated during the full movie crawl, page-1 rank in `DISPLAY_ORDER` (backlog TMDB-CRAWLER-022). **Only page 1 is ever fetched, so `DISPLAY_ORDER` never exceeds 20 and each refresh is authoritative**: since TMDB-CRAWLER-028 the neighbours TMDb no longer returns are deleted for that title (`f_tmdbprunestaleneighbours`), which is the same rule already applied to images. Before that fix these tables held the union of every top-20 ever returned and grew without bound, ~2 M dead rows measured on 2026-07-28; the historical backlog is purged separately (TMDB-CRAWLER-029).
 - `T_WC_TMDB_SERIE_SIMILAR` / `T_WC_TMDB_SERIE_RECOMMENDATION` - same for TV series, from `/tv/{id}/similar` and `/tv/{id}/recommendations`, populated during the full series crawl (backlog TMDB-CRAWLER-023). Same authoritative-refresh rule and same caveats as the movie tables above.
+- `T_WC_TMDB_MOVIE_RELEASE_DATE` - every row returned by `/movie/{id}/release_dates`, including country, language, certification, note, exact source timestamp, normalized UTC datetime, release type, and descriptors. It is deliberately independent from `T_WC_TMDB_MOVIE.DAT_RELEASE`, whose established Movie Details retrieval is unchanged.
+- `T_WC_TMDB_MOVIE_WATCH_PROVIDER` / `T_WC_TMDB_SERIE_WATCH_PROVIDER` - TMDb/JustWatch availability by country, provider, and monetization type (`flatrate`, `free`, `ads`, `rent`, `buy`). The TMDb country link and crawl timestamp are retained for attribution and freshness.
+
+### Release-date and watch-provider snapshots
+
+The three additive tables and their completion columns are created by the crawler on startup and are also mirrored in `doc/sql/TMDb-tables.sql`. A structurally complete API response is authoritative, including an empty `results` collection: the crawler replaces that title's previous rows in one transaction and records a dedicated completion timestamp. Network errors, rate limits, API errors, malformed JSON, and incomplete payloads preserve the previous snapshot.
+
+Watch-provider data comes from TMDb's JustWatch partnership. Any downstream display must attribute JustWatch and use the stored TMDb link. These rows describe the latest crawled streaming, rental, purchase, free, or ad-supported availability. They are not cinema venues, theatrical showtimes, or a guarantee of same-day availability. The normal title refresh is approximately every 30 days.
 
 ## Configuration
 
@@ -117,6 +125,7 @@ The crawler runs ~30 numbered processes grouped by purpose:
 - **14-16**: Mark/delete records whose IDs no longer appear in the TMDb export (movies, persons, series)
 - **22-28**: Refresh records older than 30 days (movies, persons, collections, companies, networks, series); **23** specifically fixes movies missing a Wikidata link
 - **31-33**: Recover entities referenced by credits but missing their own master record (persons, movies, series)
+- **34-36**: Backfill movie release-date history, movie watch providers, and series watch providers in batches of 5,000 titles; successful empty snapshots are marked complete and are not selected again
 - **51-53**: Apply incremental changes from the TMDb `/changes` API (movies, persons, series, including selective season/episode refresh)
 - **61-69**: Backfill missing image rows for each entity type (movie, person, serie, collection, company, network) and the per-language variants for movies, series, and collections
 
