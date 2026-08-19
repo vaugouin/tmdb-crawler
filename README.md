@@ -258,7 +258,7 @@ Two counters are written at the end of each run:
 `strtmdbcrawleridnotfoundactivecount` (ids currently skipped). A sudden jump in
 the first is the signal to look at: it means TMDb dropped a batch of ids, or
 answered 34 wrongly for a while. See the `TMDB-CRAWLER-027` queries in
-[doc/queries/monitoring.sql](doc/queries/monitoring.sql).
+[doc/sql/monitoring.sql](doc/sql/monitoring.sql).
 
 Processes 14/15/16 (deleted movies/persons/series) still do their own existence
 check, and now answer from the ledger when it already knows the id is gone.

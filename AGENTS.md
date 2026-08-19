@@ -65,12 +65,12 @@ Full DDL lives under [doc/sql/](doc/sql/); do not duplicate table definitions he
 ## Tracking / monitoring queries
 
 Curated, hand-written operational queries live in [doc/queries/](doc/queries/) (e.g.
-`monitoring.sql`) — kept **separate** from the auto-generated DDL dumps in `doc/sql/`.
+`doc/sql/monitoring.sql`), alongside the auto-generated DDL dumps in the same folder.
 
 **Regular task — ship a tracking query with every new feature.** Whenever a change
 adds or starts populating a column, table, or pipeline output (a new external id, a
 new entity, a new completion flag, …), add a matching tracking query to
-`doc/queries/monitoring.sql` in the same change. The query should let an operator
+`doc/sql/monitoring.sql` in the same change. The query should let an operator
 **verify the feature is working and measure coverage/progress** — typically a
 `COUNT(col)` fill rate vs `COUNT(*)`, or a per-`DAT_CREAT` collection-rate view.
 Prefer indexed columns so the query stays cheap, and add a one-line comment stating
@@ -162,3 +162,16 @@ knowledge repo (a separate repo, not cloned alongside this one):
 Consult it before implementing: tasks are `TMDB-CRAWLER-NNN` with status (done / in-progress /
 todo), priority, and quick-wins. NOTE: these are local paths on Philippe's PC and do not
 resolve on the VPS or on cloud agents (claude.ai/code).
+
+## SQL files live in `doc/sql/`
+
+Stack-wide convention, set 2026-08-20. Every **read-only** `.sql` of this repo, audit
+queries, monitoring queries, exports, reference DDL dumps, lives in `doc/sql/`, never
+at the root and never in a `doc/queries/` of its own.
+
+Two deliberate exceptions, and they are the reason the rule is worded around reading
+rather than around file type. A `.sql` **executed by code** stays where the code expects
+it, because moving it breaks a run silently. And a `.sql` that **writes** (migration,
+seed, `DELETE` cleanup) stays put too: it belongs to a procedure, not to documentation.
+When in doubt, ask whether running the file twice by accident would change the database.
+If yes, it is not a `doc/sql/` file.
