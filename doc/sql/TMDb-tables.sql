@@ -777,8 +777,6 @@ CREATE TABLE `T_WC_TMDB_MOVIE` (
   `TIM_WIKIPEDIA_COMPLETED` datetime DEFAULT NULL,
   `TIM_IMAGES_COMPLETED` datetime DEFAULT NULL,
   `TIM_VIDEOS_COMPLETED` datetime DEFAULT NULL,
-  `TIM_RELEASE_DATES_COMPLETED` datetime DEFAULT NULL,
-  `TIM_WATCH_PROVIDERS_COMPLETED` datetime DEFAULT NULL,
   `WIKIPEDIA_FORMAT_LINE` mediumtext DEFAULT NULL,
   `DAT_WIKIPEDIA_FORMAT_LINE` datetime DEFAULT NULL,
   `IS_COLOR` int(11) DEFAULT NULL,
@@ -796,6 +794,8 @@ CREATE TABLE `T_WC_TMDB_MOVIE` (
   `IS_DOCUMENTARY` int(5) DEFAULT NULL,
   `IS_SHORT_FILM` int(5) DEFAULT NULL,
   `SOUND_TECHNOLOGY` varchar(200) DEFAULT NULL,
+  `TIM_RELEASE_DATES_COMPLETED` datetime DEFAULT NULL,
+  `TIM_WATCH_PROVIDERS_COMPLETED` datetime DEFAULT NULL,
   PRIMARY KEY (`ID_MOVIE`),
   KEY `DELETED` (`DELETED`),
   KEY `DISPLAY_ORDER` (`DISPLAY_ORDER`),
@@ -2197,7 +2197,6 @@ CREATE TABLE `T_WC_TMDB_SERIE` (
   `TIM_WIKIPEDIA_COMPLETED` datetime DEFAULT NULL,
   `TIM_IMAGES_COMPLETED` datetime DEFAULT NULL,
   `TIM_VIDEOS_COMPLETED` datetime DEFAULT NULL,
-  `TIM_WATCH_PROVIDERS_COMPLETED` datetime DEFAULT NULL,
   `COUNTRIES` varchar(200) DEFAULT NULL,
   `SPOKEN_LANGUAGES` varchar(200) DEFAULT NULL,
   `NUMBER_OF_EPISODES` int(5) DEFAULT NULL,
@@ -2213,6 +2212,7 @@ CREATE TABLE `T_WC_TMDB_SERIE` (
   `LAST_EPISODE_SEASON_NUMBER` int(5) DEFAULT NULL,
   `LAST_EPISODE_NUMBER` int(5) DEFAULT NULL,
   `TIM_LAST_CHANGES_CHECK` datetime DEFAULT NULL,
+  `TIM_WATCH_PROVIDERS_COMPLETED` datetime DEFAULT NULL,
   PRIMARY KEY (`ID_SERIE`),
   KEY `DELETED` (`DELETED`),
   KEY `DISPLAY_ORDER` (`DISPLAY_ORDER`),
@@ -2251,14 +2251,14 @@ CREATE TABLE `T_WC_TMDB_SERIE` (
   KEY `SERIE_TYPE` (`SERIE_TYPE`),
   KEY `TIM_IMAGES_COMPLETED` (`TIM_IMAGES_COMPLETED`),
   KEY `TIM_VIDEOS_COMPLETED` (`TIM_VIDEOS_COMPLETED`),
-  KEY `TIM_WATCH_PROVIDERS_COMPLETED` (`TIM_WATCH_PROVIDERS_COMPLETED`),
   KEY `TIM_SEASONS_COMPLETED` (`TIM_SEASONS_COMPLETED`),
   KEY `TIM_EPISODES_COMPLETED` (`TIM_EPISODES_COMPLETED`),
   KEY `IN_PRODUCTION` (`IN_PRODUCTION`),
   KEY `NEXT_EPISODE_DAT_AIR` (`NEXT_EPISODE_DAT_AIR`),
   KEY `LAST_EPISODE_DAT_AIR` (`LAST_EPISODE_DAT_AIR`),
   KEY `TIM_LAST_CHANGES_CHECK` (`TIM_LAST_CHANGES_CHECK`),
-  KEY `ID_TVDB` (`ID_TVDB`)
+  KEY `ID_TVDB` (`ID_TVDB`),
+  KEY `TIM_WATCH_PROVIDERS_COMPLETED` (`TIM_WATCH_PROVIDERS_COMPLETED`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -2653,6 +2653,52 @@ CREATE TABLE `T_WC_TMDB_SERIE_WATCH_PROVIDER` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `T_WC_TMDB_SPACY_LEMME` (
+  `ID_LEMME` int(11) NOT NULL AUTO_INCREMENT,
+  `LANG` varchar(10) DEFAULT NULL,
+  `NAME` varchar(250) DEFAULT NULL,
+  `LABEL` varchar(10) DEFAULT NULL,
+  `DELETED` int(5) DEFAULT NULL,
+  `DISPLAY_ORDER` int(5) DEFAULT NULL,
+  `ID_CREATOR` int(5) DEFAULT NULL,
+  `DAT_CREAT` date DEFAULT NULL,
+  `ID_OWNER` int(5) DEFAULT NULL,
+  `TIM_UPDATED` datetime DEFAULT NULL,
+  `ID_USER_UPDATED` int(5) DEFAULT NULL,
+  PRIMARY KEY (`ID_LEMME`),
+  KEY `LANG` (`LANG`),
+  KEY `NAME` (`NAME`),
+  KEY `LABEL` (`LABEL`),
+  KEY `DELETED` (`DELETED`),
+  KEY `DISPLAY_ORDER` (`DISPLAY_ORDER`),
+  KEY `ID_OWNER` (`ID_OWNER`),
+  KEY `ID_CREATOR` (`ID_CREATOR`),
+  KEY `ID_USER_UPDATED` (`ID_USER_UPDATED`),
+  KEY `TIM_UPDATED` (`TIM_UPDATED`),
+  KEY `DAT_CREAT` (`DAT_CREAT`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `T_WC_TMDB_TV_NETWORK_ID_IMPORT` (
+  `id` int(11) NOT NULL,
+  `name` varchar(250) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `T_WC_TMDB_TV_SERIE_ID_IMPORT` (
+  `id` int(11) NOT NULL,
+  `original_name` varchar(250) DEFAULT NULL,
+  `popularity` double DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `popularity` (`popularity`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `T_WC_TMDB_WATCH_PROVIDER` (
   `ID_PROVIDER` int(11) NOT NULL,
   `PROVIDER_NAME` varchar(250) DEFAULT NULL,
@@ -2734,51 +2780,5 @@ CREATE TABLE `T_WC_TMDB_WATCH_PROVIDER_REGION` (
   KEY `CONTENT_TYPE` (`CONTENT_TYPE`),
   KEY `COUNTRY_CODE` (`COUNTRY_CODE`),
   KEY `TIM_PROVIDER_UPDATED` (`TIM_PROVIDER_UPDATED`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `T_WC_TMDB_SPACY_LEMME` (
-  `ID_LEMME` int(11) NOT NULL AUTO_INCREMENT,
-  `LANG` varchar(10) DEFAULT NULL,
-  `NAME` varchar(250) DEFAULT NULL,
-  `LABEL` varchar(10) DEFAULT NULL,
-  `DELETED` int(5) DEFAULT NULL,
-  `DISPLAY_ORDER` int(5) DEFAULT NULL,
-  `ID_CREATOR` int(5) DEFAULT NULL,
-  `DAT_CREAT` date DEFAULT NULL,
-  `ID_OWNER` int(5) DEFAULT NULL,
-  `TIM_UPDATED` datetime DEFAULT NULL,
-  `ID_USER_UPDATED` int(5) DEFAULT NULL,
-  PRIMARY KEY (`ID_LEMME`),
-  KEY `LANG` (`LANG`),
-  KEY `NAME` (`NAME`),
-  KEY `LABEL` (`LABEL`),
-  KEY `DELETED` (`DELETED`),
-  KEY `DISPLAY_ORDER` (`DISPLAY_ORDER`),
-  KEY `ID_OWNER` (`ID_OWNER`),
-  KEY `ID_CREATOR` (`ID_CREATOR`),
-  KEY `ID_USER_UPDATED` (`ID_USER_UPDATED`),
-  KEY `TIM_UPDATED` (`TIM_UPDATED`),
-  KEY `DAT_CREAT` (`DAT_CREAT`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `T_WC_TMDB_TV_NETWORK_ID_IMPORT` (
-  `id` int(11) NOT NULL,
-  `name` varchar(250) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `name` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `T_WC_TMDB_TV_SERIE_ID_IMPORT` (
-  `id` int(11) NOT NULL,
-  `original_name` varchar(250) DEFAULT NULL,
-  `popularity` double DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `popularity` (`popularity`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
