@@ -704,7 +704,6 @@ def _f_tmdbreplaceadditivesnapshot(strtablename, stridcolumn, lngcontentid,
             f"UPDATE `{strmastertable}` SET `{strcompletioncolumn}` = %s WHERE `{stridcolumn}` = %s",
             (strsnapshotupdated, lngcontentid))
         connectioncp.commit()
-        print(f"{strcontext}: replaced snapshot with {len(arrrows)} rows")
         return True
     except Exception as err:
         connectioncp.rollback()
