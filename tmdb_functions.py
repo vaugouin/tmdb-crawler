@@ -469,7 +469,6 @@ def _f_tmdbbuildmoviereleasedaterows(lngmovieid, data, strsnapshotupdated):
         raise ValueError("release_dates payload has no results list")
 
     arrrows = []
-    lngmalformedlangcount = 0
     for lngcountryorder, arrcountry in enumerate(data["results"], start=1):
         if not isinstance(arrcountry, dict):
             raise ValueError("release_dates country entry is not an object")
@@ -487,11 +486,7 @@ def _f_tmdbbuildmoviereleasedaterows(lngmovieid, data, strsnapshotupdated):
                 raise ValueError("release_dates item has no release_date/type")
             if not isinstance(arrdescriptors, list):
                 raise ValueError("release_dates descriptors is not a list")
-            strrawlanguage = arrreleasedate.get("iso_639_1")
-            strlanguage = _f_tmdblangcode(strrawlanguage)
-            if (isinstance(strrawlanguage, str) and strrawlanguage.strip()
-                    and strlanguage != strrawlanguage.strip()):
-                lngmalformedlangcount += 1
+            strlanguage = _f_tmdblangcode(arrreleasedate.get("iso_639_1"))
             strcertification = arrreleasedate.get("certification")
             if isinstance(strcertification, str):
                 strcertification = strcertification[:100]
@@ -511,9 +506,6 @@ def _f_tmdbbuildmoviereleasedaterows(lngmovieid, data, strsnapshotupdated):
                 strsnapshotupdated[:10],
                 strsnapshotupdated
             ))
-    if lngmalformedlangcount > 0:
-        print(f"f_tmdbmoviereleasedatestosql({lngmovieid}): {lngmalformedlangcount} "
-              "malformed iso_639_1 value(s) normalized in /release_dates")
     return arrrows
 
 def _f_tmdbbuildwatchproviderrows(lngcontentid, data, strsnapshotupdated):
@@ -688,8 +680,6 @@ ON DUPLICATE KEY UPDATE
                         (strcontenttype, len(arrcatalogrows), len(arrregionrows),
                          strsnapshotupdated, strsnapshotupdated[:10], strsnapshotupdated))
         connectioncp.commit()
-        print(f"watch-provider {strcontenttype} catalogue: replaced "
-              f"{len(arrcatalogrows)} providers and {len(arrregionrows)} regional priorities")
         return True
     except Exception as err:
         connectioncp.rollback()
