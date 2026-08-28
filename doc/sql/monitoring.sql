@@ -218,6 +218,21 @@ FROM T_WC_TMDB_MOVIE_RELEASE_DATE
 GROUP BY RELEASE_TYPE
 ORDER BY RELEASE_TYPE;
 
+-- Release-date language health. TMDb occasionally returns the whole language
+-- object instead of its code ('{"folded_name"=>"Swedish", "iso_639_1"=>"sv"}'),
+-- which overflowed LANG varchar(10) and aborted the whole title snapshot. The
+-- crawler now recovers the embedded code and stores NULL when none is readable,
+-- so a NULL here means TMDb published no usable language for that release event,
+-- not a crawler miss. SUSPECT_LANG must stay 0: any row means a new upstream
+-- shape got past the normalizer.
+SELECT COUNT(*)                                                         AS RELEASE_ROWS,
+       COUNT(LANG)                                                      AS WITH_LANG,
+       ROUND(100 * COUNT(LANG) / NULLIF(COUNT(*), 0), 1)                AS PCT_WITH_LANG,
+       SUM(CASE WHEN LANG IS NOT NULL
+                 AND (CHAR_LENGTH(LANG) > 5 OR LANG NOT REGEXP '^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,4})?$')
+                THEN 1 ELSE 0 END)                                      AS SUSPECT_LANG
+FROM T_WC_TMDB_MOVIE_RELEASE_DATE;
+
 -- Watch-provider coverage and freshness by content family. The stored country
 -- link is the attribution route; provider rows never represent cinema showtimes.
 SELECT 'MOVIE' AS ENTITY,

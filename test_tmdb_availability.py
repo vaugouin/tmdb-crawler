@@ -103,6 +103,47 @@ class AvailabilityParsingTests(unittest.TestCase):
         self.assertEqual("https://www.themoviedb.org/movie/42/watch?locale=FR", rows[0][7])
         self.assertEqual("rent", rows[1][2])
 
+    def test_oversized_language_object_does_not_lose_the_release_snapshot(self):
+        # TMDb sometimes returns the whole language object instead of its code,
+        # which used to overflow LANG varchar(10) and abort the whole snapshot.
+        strswedishobject = ('{"folded_name"=>"Swedish", "english_name"=>"Swedish", '
+                            '"iso_639_1"=>"sv", "native_name"=>"Swedish"}')
+        payload = {
+            "results": [{
+                "iso_3166_1": "SE",
+                "release_dates": [{
+                    "certification": "x" * 150,
+                    "descriptors": [],
+                    "iso_639_1": strswedishobject,
+                    "note": "",
+                    "release_date": "2026-08-19T21:30:00.000Z",
+                    "type": 3,
+                }, {
+                    "certification": "12",
+                    "descriptors": [],
+                    "iso_639_1": "not a language code at all",
+                    "note": "",
+                    "release_date": "2026-08-20T00:00:00.000Z",
+                    "type": 3,
+                }],
+            }]
+        }
+
+        rows = tf._f_tmdbbuildmoviereleasedaterows(42, payload, "2026-08-19 22:00:00")
+
+        self.assertEqual(2, len(rows))
+        self.assertEqual("sv", rows[0][2])
+        self.assertEqual(100, len(rows[0][3]))
+        self.assertIsNone(rows[1][2])
+        self.assertEqual("12", rows[1][3])
+
+    def test_language_code_normalization_keeps_usable_values(self):
+        self.assertEqual("fr", tf._f_tmdblangcode("fr"))
+        self.assertEqual("pt-BR", tf._f_tmdblangcode("pt-BR"))
+        self.assertIsNone(tf._f_tmdblangcode(""))
+        self.assertIsNone(tf._f_tmdblangcode(None))
+        self.assertIsNone(tf._f_tmdblangcode("this is far too long"))
+
     def test_incomplete_payload_is_rejected_before_database_replacement(self):
         with self.assertRaises(ValueError):
             tf._f_tmdbbuildmoviereleasedaterows(42, {"id": 42}, "2026-08-19 22:00:00")
