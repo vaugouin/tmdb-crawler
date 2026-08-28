@@ -1366,12 +1366,22 @@ def f_tmdbpersontosql(lngpersonid):
                 strpersonprofilepath = data['profile_path']
                 strpersonhomepage = data['homepage']
                 strpersonname = data['name']
-                strpersonplaceofbirth = str(data['place_of_birth'])
-                strpersonplaceofbirth = strpersonplaceofbirth.strip()
-                if strpersonplaceofbirth: 
+                # Taken raw, like every other field above: TMDb sends
+                # "place_of_birth": null for most persons and pymysql writes that None
+                # as SQL NULL. It used to go through str(), which turned the null into
+                # the 4-character text "None" -- neither NULL nor empty, so it defeated
+                # every "IS NOT NULL AND <> ''" filter downstream and left ~4.5M junk
+                # rows for tmdb-person-preprocess to parse on each of its runs.
+                strpersonplaceofbirth = data['place_of_birth']
+                if strpersonplaceofbirth:
+                    strpersonplaceofbirth = str(strpersonplaceofbirth).strip()
                     if len(strpersonplaceofbirth) > 200:
                         # If place of birth is too long, we chop it
                         strpersonplaceofbirth = strpersonplaceofbirth[:200]
+                if not strpersonplaceofbirth:
+                    # An empty or whitespace-only value carries no more information than
+                    # a missing one; store NULL for both so the filters stay meaningful.
+                    strpersonplaceofbirth = None
                 dblpersonpopularity = data['popularity']
                 strpersonknownfordepartment = data['known_for_department']
                 boopersonadult = data['adult']
