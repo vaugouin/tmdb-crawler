@@ -872,18 +872,57 @@ SET autocommit = 1; """
                                 lngpage += 1
                                 if lngpage > lngtotalpages:
                                     intencore = False
-                            # The current date is fully processed
-                            print("The current date is fully processed")
-                            dattmdbchangesdate = datetime.strptime(strtmdbchangesdate, '%Y-%m-%d')
-                            print("dattmdbchangesdate=",strtmdbchangesdate)
-                            datnextday = dattmdbchangesdate + timedelta(days=1)
-                            strtmdbchangesdate = datnextday.strftime('%Y-%m-%d')
-                            print("datnextday=",strtmdbchangesdate)
-                            cp.f_setservervariable(strtmdbchangesdatevarname,strtmdbchangesdate,"Date of the last request for " + str(inttmdbchanges) + " : " + strtmdbchanges + " changes using the TMDb API",0)
+                            # The count is informational and holds either way.
                             cp.f_setservervariable(strtmdbchangescountvarname,str(lngcount),"Count of " + str(inttmdbchanges) + " : " + strtmdbchanges + " changes using the TMDb API",0)
-                            strnowdate = datetime.now(cp.paris_tz).strftime("%Y-%m-%d")
-                            if strtmdbchangesdate > strnowdate:
-                                intencoredate = False
+                            if boolapifailed:
+                                # ⚠ THE DAY WAS ABANDONED PART WAY, SO THE CURSOR MUST NOT MOVE.
+                                #
+                                # Fixed 2026-09-14. boolapifailed was assigned above and read
+                                # NOWHERE: the block below ran regardless, printed "fully
+                                # processed" and dated the cursor to the next day. Everything
+                                # after the failing page was lost, and lost for good once the
+                                # 2-day rewind at the start of a run had scrolled past it.
+                                #
+                                # Measured the day this was found: the movie feed for
+                                # 2026-09-02 was 113 pages and 11 290 ids, and 234 of the 235
+                                # records selenium-tmdb re-exported every morning since that
+                                # date sat in its tail pages, absent from the first 81. Their
+                                # TIM_CREDITS_COMPLETED had not moved since May, so the crawler
+                                # had never read them: the feed carried them, the guard below
+                                # said to refresh them, and the day had been declared done.
+                                #
+                                # GUARD, and it is the reason this is not a bare "do not
+                                # advance". Past 14 days of lag the window /changes serves is
+                                # closed, the day is unrecoverable, and insisting on it would
+                                # stop the catch-up forever: the crawler would stall on one
+                                # dead day and stop seeing every newer change. A known loss,
+                                # said out loud, beats a crawler that sees nothing.
+                                lngretard = (datetime.now(cp.paris_tz).date()
+                                             - datetime.strptime(strtmdbchangesdate, '%Y-%m-%d').date()).days
+                                if lngretard > 14:
+                                    print(f"⚠️ {strtmdbchanges} changes for {strtmdbchangesdate} failed and that "
+                                          f"date is {lngretard} days behind, past the 14-day window TMDb serves. "
+                                          f"Advancing the cursor: those changes are unrecoverable.")
+                                    dattmdbchangesdate = datetime.strptime(strtmdbchangesdate, '%Y-%m-%d')
+                                    datnextday = dattmdbchangesdate + timedelta(days=1)
+                                    strtmdbchangesdate = datnextday.strftime('%Y-%m-%d')
+                                    cp.f_setservervariable(strtmdbchangesdatevarname,strtmdbchangesdate,"Date of the last request for " + str(inttmdbchanges) + " : " + strtmdbchanges + " changes using the TMDb API",0)
+                                else:
+                                    print(f"{strtmdbchanges} changes for {strtmdbchangesdate} are incomplete, "
+                                          f"cursor left where it is ({lngretard} day(s) behind). The next run "
+                                          f"starts that day over.")
+                            else:
+                                # The current date is fully processed
+                                print("The current date is fully processed")
+                                dattmdbchangesdate = datetime.strptime(strtmdbchangesdate, '%Y-%m-%d')
+                                print("dattmdbchangesdate=",strtmdbchangesdate)
+                                datnextday = dattmdbchangesdate + timedelta(days=1)
+                                strtmdbchangesdate = datnextday.strftime('%Y-%m-%d')
+                                print("datnextday=",strtmdbchangesdate)
+                                cp.f_setservervariable(strtmdbchangesdatevarname,strtmdbchangesdate,"Date of the last request for " + str(inttmdbchanges) + " : " + strtmdbchanges + " changes using the TMDb API",0)
+                                strnowdate = datetime.now(cp.paris_tz).strftime("%Y-%m-%d")
+                                if strtmdbchangesdate > strnowdate:
+                                    intencoredate = False
 
             # Configuration for missing images processing (Loop #4)
             # Each entity type is configured with:
