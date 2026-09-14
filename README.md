@@ -128,7 +128,8 @@ The crawler runs ~30 numbered processes grouped by purpose:
 - **19**: Refresh the global movie and TV provider entity catalogues and their country-specific priorities; two API calls per crawler run
 - **13**: Refresh saved lists
 - **14-16**: Mark/delete records whose IDs no longer appear in the TMDb export (movies, persons, series)
-- **22-28**: Refresh records older than 30 days (movies, persons, collections, companies, networks, series); **23** specifically fixes movies missing a Wikidata link
+- **22, 24-28**: Refresh records older than 30 days (movies, persons, collections, companies, networks, series)
+- **23, 29-30**: Re-read movies, series and persons whose stored `wikidata_id` is missing or malformed while Wikidata knows a QID under the same IMDb id, so a `wikidata_id` added on TMDb since the last crawl is picked up. One details call per record (the payload already carries `external_ids`), not the full "everything" chain. These close the loop with `selenium-tmdb`, whose robot is what writes those QIDs onto TMDb: until 2026-09-14 process 23 read the frozen `T_WC_WIKIDATA_MOVIE_V1` and could not see them, so the same records were re-listed for repair every morning
 - **31-33**: Recover entities referenced by credits but missing their own master record (persons, movies, series)
 - **34-36**: Backfill movie release-date history, movie watch providers, and series watch providers in batches of 5,000 titles; successful empty snapshots are marked complete and are not selected again
 - **51-53**: Apply incremental changes from the TMDb `/changes` API (movies, persons, series, including selective season/episode refresh)

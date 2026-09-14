@@ -18,7 +18,7 @@ Deeper specs live in their own files:
 `tmdb-crawler` is one stage of **Agent BBB**, a multi-repository movie/TV database system owned by GitHub user `vaugouin`. All sibling repos live under `%USERPROFILE%/Code/<repo>` and at `github.com/vaugouin/<repo>`; they are interdependent stages of one pipeline that converges on a shared MySQL/MariaDB database (`T_WC_*` tables) and a ChromaDB vector store. The canonical roster of sibling repositories is kept in `%USERPROFILE%/Nestor/projets/t2s-backlog/topics/related-repositories.txt` (documentation repo `Nestor`, outside `Code/`).
 
 Pipeline stages:
-- **Infrastructure** — `python` (shared crawler base image), `chromadb` (vector service), `reverseproxy` (NGINX TLS ingress), `chromadb-security-test` (firewall validation).
+- **Infrastructure** — `python` (shared crawler base image), `chromadb` (vector service), `reverseproxy` (NGINX TLS ingress), `chromadb-security-test` (firewall validation), `tools` (host-side operational scripts for the shared MariaDB: backups per perimeter, one-off `.sql` runs; **private repo**, it documents where the database lives and how it is restored).
 - **Acquisition** — `tmdb-crawler`, `imdb-crawler`, `sparql-crawler`, `sparql-movies-persons`, `wikidata-crawler`, `wikipedia-crawler`, `selenium-tmdb`, `download-images`, `sqlite-plex-to-tmdb`, `movieparadise`.
 - **Preprocessing → `T_WC_T2S_*`** — `tmdb-movie-preprocess`, `tmdb-person-preprocess`, `keywords-processing`.
 - **Semantic index & name resolution** — `embedding-update`, `embedding-query`, `rapidfuzz_query`.
@@ -161,7 +161,7 @@ This crawler is built and run as a Docker container via the repo's root `Dockerf
 
 ---
 
-**Last Updated**: 2026-08-19
+**Last Updated**: 2026-09-14
 **Current Version**: 1.0.0 
 
 ## Backlog (Nestor second-brain)
@@ -188,3 +188,42 @@ it, because moving it breaks a run silently. And a `.sql` that **writes** (migra
 seed, `DELETE` cleanup) stays put too: it belongs to a procedure, not to documentation.
 When in doubt, ask whether running the file twice by accident would change the database.
 If yes, it is not a `doc/sql/` file.
+
+## The `*_V1` Wikidata tables are frozen: never read a fact from them
+
+**Added 2026-09-14, after process 23 had been blind for an unknown length of time.**
+The SPARQL crawlers that filled `T_WC_WIKIDATA_MOVIE_V1`, `_SERIE_V1`, `_PERSON_V1` and
+their siblings are **stopped** (`WIKIDATA-CRAWLER-015`). Only `wikipedia-crawler` still
+writes those tables, and only the image columns (`WIKIPEDIA_POSTER_PATH`,
+`WIKIPEDIA_PROFILE_PATH`, `WIKIPEDIA_IMAGE_PATH`), so **a recent `TIM_UPDATED` on a V1
+table is not evidence that its facts are current.** `ID_WIKIDATA`, `ID_IMDB` and the
+TMDb id columns stopped moving when the crawlers did.
+
+Read Wikidata facts from V2 instead: the entity lives in `T_WC_WIKIDATA_<TYPE>` and the
+external ids are **statements**, `P345` for IMDb, `P4947` / `P4983` / `P4985` for the
+TMDb movie / series / person id, joined through `T_WC_WIKIDATA_STATEMENT` and
+`T_WC_WIKIDATA_EXTERNAL_ID_VALUE`. `f_wikidataidfixsql` in `tmdb-crawler.py` is the
+worked example, and the `preprocess/wikidata-id-*.sql` files of `selenium-tmdb` are the
+same shape.
+
+**Why this failure is quiet, and therefore worth a section.** A V1 read does not error
+and does not return nothing: it returns the subset V1 happened to know, which still
+looks like a plausible result set. Process 23 kept running daily, kept printing a row
+count, and kept repairing a handful of movies, while the population it exists to repair
+had grown by two orders of magnitude and was invisible to it. Measured 2026-09-14:
+`selenium-tmdb`'s equivalent export went from about 106 rows to 20 201 the day it moved
+to V2, and 235 movies its robot visited that morning already carried on TMDb the exact
+QID it wrote, because our copy of `ID_WIKIDATA` had been stale for 13 days.
+
+Two traps came with that code and are worth recognising elsewhere:
+
+- **`<>` against a nullable column swallows the `IS NULL` case.** The old clause ANDed
+  `V1.ID_WIKIDATA <> TMDB.ID_WIKIDATA` with `(TMDB.ID_WIKIDATA IS NULL OR = '')`. On a
+  NULL the `<>` yields NULL, so only the empty string ever matched and one branch of an
+  explicit `OR` was dead. Prefer testing what you mean ("our copy is unusable") over
+  comparing to a value that may be absent.
+- **V2 joins multiply rows.** One entity can carry several `P345` statements and several
+  entities can share an IMDb id, so a V1 query ported column-for-column returns the same
+  id many times. `SELECT DISTINCT` on the id alone is the fix when only the id is wanted;
+  when other columns are selected, `DISTINCT` does not help and a scalar subquery is
+  needed (see `selenium-tmdb/preprocess/wikidata-id-movie-fix.sql`).

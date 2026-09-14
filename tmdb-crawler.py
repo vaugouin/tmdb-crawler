@@ -277,6 +277,101 @@ SET autocommit = 1; """
                         f"WHERE NF.ENTITY_TYPE = '{strentitytype}' AND NF.ID_ENTITY = {stridcolumn} "
                         "AND NF.TIM_RETRY_AFTER > NOW()) ")
 
+            def f_wikidataidfixsql(strentitytype, strwikidatatable, strtmdbtable, stridcolumn):
+                """
+                Candidate ids for the "wikidata id is not set" repair processes 23, 29, 30.
+
+                Selects records for which Wikidata knows a QID under the same IMDb id while
+                our own copy of the TMDb wikidata_id is missing or malformed. Such a record
+                is worth re-reading from the TMDb API: either TMDb already carries the QID
+                and our copy is stale, or it does not and the record legitimately stays a
+                candidate until selenium-tmdb's robot writes it.
+
+                Parameters:
+                -----------
+                strentitytype : str
+                    Entity type as spelled in T_WC_TMDB_ID_NOT_FOUND ("movie", "serie", "person")
+                strwikidatatable : str
+                    V2 Wikidata entity table (T_WC_WIKIDATA_MOVIE / _SERIE / _PERSON)
+                strtmdbtable : str
+                    TMDb table to refresh (T_WC_TMDB_MOVIE / _SERIE / _PERSON)
+                stridcolumn : str
+                    Primary key of strtmdbtable (ID_MOVIE / ID_SERIE / ID_PERSON)
+
+                Returns:
+                --------
+                str
+                    SQL exposing an `id` column, ready for f_runprocessscope
+
+                ⚠ MIGRATED FROM V1 TO THE V2 STATEMENT MODEL, 2026-09-14, AND THE V1
+                VERSION WAS BLIND. Process 23 read T_WC_WIKIDATA_MOVIE_V1, where the QID,
+                the IMDb id and the TMDb id sat in three columns of one row. The SPARQL
+                crawlers that filled those columns are stopped (WIKIDATA-CRAWLER-015), so
+                V1 is frozen: only wikipedia-crawler still writes it, and only the image
+                columns. The process could therefore rediscover nothing Wikidata had gained
+                since, which is exactly the population it exists to repair.
+
+                In V2 the two external ids are STATEMENTS, P345 for IMDb, and the entity
+                lives in T_WC_WIKIDATA_<TYPE>, hence the two joins below. Measured on the
+                movies: selenium-tmdb's export moved to V2 on 2026-09-01 and went from
+                about 106 candidates to 20 201. On 2026-09-14 its robot re-visited 235
+                movies that had been exported every day since 2026-09-02 and wrote a QID
+                they already carried. The TMDb API returned the right QID for all of them,
+                so only our copy was stale, and it stayed stale because this process could
+                not see them.
+
+                ⚠ THE OLD WHERE CLAUSE ALSO HID ITS OWN NULL BRANCH. It ANDed
+                "V1.ID_WIKIDATA <> TMDB.ID_WIKIDATA" with "(TMDB.ID_WIKIDATA IS NULL OR
+                = '')". On a NULL column the <> yields NULL, not true, so the IS NULL branch
+                was unreachable and only the empty string ever matched. The comparison is
+                dropped rather than repaired: "our copy is unusable" is what this process
+                means, and it already implies the difference. selenium-tmdb carried the
+                identical bug in its own export and fixed it on 2026-09-01. The malformed
+                case (NOT REGEXP) is new here, so this candidate set now matches the one
+                the exports list.
+
+                No ambiguity guard, unlike those exports. They drop IMDb ids carrying
+                several QIDs because their robot WRITES to TMDb and cannot choose between
+                them; this process only re-READS TMDb, so an ambiguous record is still worth
+                refreshing. DISTINCT is what matters instead: in V2 one entity can carry
+                several P345 statements and several entities can share an IMDb id, and
+                without it the same id would be crawled once per statement.
+
+                ⚠ ORDER BY THE PRIMARY KEY, AND DO NOT "IMPROVE" IT TO TIM_UPDATED. The
+                join on imdb.VALUE_EXTERNAL_ID survives only because the plan drives from
+                the Wikidata side and probes <TMDb table>.ID_IMDB, which is indexed;
+                VALUE_EXTERNAL_ID itself is NOT (only VALUE_EXTERNAL_ID_NORMALIZED(255)
+                is). Ordering by TIM_UPDATED gives the optimizer a reason to walk the TMDb
+                table in index order instead and probe that unindexed column once per row.
+                A per-row scan of T_WC_WIKIDATA_EXTERNAL_ID_VALUE is what ran the
+                selenium-tmdb container for over an hour without returning on 2026-09-02;
+                it was reached there through a correlated subquery rather than through an
+                ORDER BY, but the cost and the unindexed column are the same. Primary-key
+                order is what the V1 version used and what the preprocess exports still
+                use daily at this volume.
+
+                The limit is a blow-up bound, not a work quota: with no LIMIT at all (the
+                V1 behaviour) a bulk Wikidata import could hand this process hundreds of
+                thousands of ids and monopolise a run. It sits far above the largest set
+                ever observed, 20 201 movies on 2026-09-02, because a quota here would
+                starve the tail: a candidate leaves this set only when TMDb really carries
+                the QID, so the ones waiting on selenium-tmdb's robot stay candidates
+                indefinitely and would hold the head of a primary-key ordering forever. On
+                2026-09-14 the three sets held 1 873 movies, 412 series and 720 persons.
+                """
+                return (f"SELECT DISTINCT T1.{stridcolumn} AS id "
+                        f"FROM {strwikidatatable} W "
+                        "INNER JOIN T_WC_WIKIDATA_STATEMENT si ON si.ID_WIKIDATA = W.ID_WIKIDATA "
+                        "AND si.ID_PROPERTY = 'P345' AND (si.`RANK` IS NULL OR si.`RANK` <> 'deprecated') "
+                        "INNER JOIN T_WC_WIKIDATA_EXTERNAL_ID_VALUE imdb ON imdb.ID_STATEMENT = si.ID_STATEMENT "
+                        f"INNER JOIN {strtmdbtable} T1 ON imdb.VALUE_EXTERNAL_ID = T1.ID_IMDB "
+                        "WHERE imdb.VALUE_EXTERNAL_ID LIKE 'tt%' "
+                        "AND (T1.ID_WIKIDATA IS NULL OR T1.ID_WIKIDATA = '' "
+                        "OR T1.ID_WIKIDATA NOT REGEXP '^Q[0-9]+$') "
+                        + f_notfoundfilter(strentitytype, f"T1.{stridcolumn}")
+                        + f"ORDER BY T1.{stridcolumn} ASC "
+                        "LIMIT 50000 ")
+
             def f_getprocesssql(intindex):
                 datnow = datetime.now(cp.paris_tz)
                 strcurrentprocess = ""
@@ -363,19 +458,15 @@ SET autocommit = 1; """
                 elif intindex == 23:
                     if strdattodayminus1 > strtmdbdatprev:
                         strcurrentprocess = f"{intindex}: refreshing movies when id wikidata is not set"
-                        strsql += "SELECT T_WC_TMDB_MOVIE.ID_MOVIE AS id, "
-                        strsql += "T_WC_WIKIDATA_MOVIE_V1.ID_WIKIDATA AS ID_WIKIDATA, "
-                        strsql += "T_WC_WIKIDATA_MOVIE_V1.ID_IMDB, "
-                        strsql += "T_WC_WIKIDATA_MOVIE_V1.ID_MOVIE AS ID_WIKIDATA_MOVIE, "
-                        strsql += "T_WC_TMDB_MOVIE.ID_WIKIDATA AS ID_TMDB_WIKIDATA, "
-                        strsql += "T_WC_TMDB_MOVIE.TITLE "
-                        strsql += "FROM T_WC_WIKIDATA_MOVIE_V1 "
-                        strsql += "INNER JOIN T_WC_TMDB_MOVIE ON T_WC_WIKIDATA_MOVIE_V1.ID_IMDB = T_WC_TMDB_MOVIE.ID_IMDB "
-                        strsql += "WHERE T_WC_WIKIDATA_MOVIE_V1.ID_IMDB IS NOT NULL AND T_WC_WIKIDATA_MOVIE_V1.ID_IMDB <> '' AND T_WC_WIKIDATA_MOVIE_V1.ID_IMDB LIKE 'tt%' "
-                        strsql += "AND T_WC_WIKIDATA_MOVIE_V1.ID_WIKIDATA <> T_WC_TMDB_MOVIE.ID_WIKIDATA "
-                        strsql += "AND (T_WC_TMDB_MOVIE.ID_WIKIDATA IS NULL OR T_WC_TMDB_MOVIE.ID_WIKIDATA = '') "
-                        strsql += f_notfoundfilter("movie", "T_WC_TMDB_MOVIE.ID_MOVIE")
-                        strsql += "ORDER BY T_WC_TMDB_MOVIE.ID_MOVIE ASC "
+                        strsql += f_wikidataidfixsql("movie", "T_WC_WIKIDATA_MOVIE", "T_WC_TMDB_MOVIE", "ID_MOVIE")
+                elif intindex == 29:
+                    if strdattodayminus1 > strtmdbdatprev:
+                        strcurrentprocess = f"{intindex}: refreshing series when id wikidata is not set"
+                        strsql += f_wikidataidfixsql("serie", "T_WC_WIKIDATA_SERIE", "T_WC_TMDB_SERIE", "ID_SERIE")
+                elif intindex == 30:
+                    if strdattodayminus1 > strtmdbdatprev:
+                        strcurrentprocess = f"{intindex}: refreshing persons when id wikidata is not set"
+                        strsql += f_wikidataidfixsql("person", "T_WC_WIKIDATA_PERSON", "T_WC_TMDB_PERSON", "ID_PERSON")
                 elif intindex == 13:
                     if strdattodayminus1 > strtmdbdatprev:
                         strcurrentprocess = f"{intindex}: refreshing lists"
@@ -495,7 +586,7 @@ SET autocommit = 1; """
                 lngid = row['id']
                 if intindex in (1, 25):
                     tf.f_tmdbcollectiontosqleverything(lngid)
-                elif intindex in (2, 22, 23, 32):
+                elif intindex in (2, 22, 32):
                     tf.f_tmdbmovietosqleverything(lngid)
                 elif intindex in (3, 24, 31):
                     tf.f_tmdbpersontosqleverything(lngid)
@@ -505,6 +596,26 @@ SET autocommit = 1; """
                         # episodes would answer 34 too (TMDB-CRAWLER-027).
                         return
                     tf.f_tmdbserieselectiveseasonsepisodestosql(lngid)
+                elif intindex in (23, 29, 30):
+                    # ONE API CALL, NOT ELEVEN. These three processes exist to learn a
+                    # single column, and the details call already carries it: every
+                    # f_tmdb<entity>tosql builds its url with
+                    # "append_to_response=...,external_ids" and writes ID_WIKIDATA from
+                    # the payload. The matching "everything" wrapper would add ten calls
+                    # (fr language, keywords, similar, recommendations, release dates,
+                    # watch providers, images, two video languages) that say nothing about
+                    # the wikidata id, on a candidate set re-read every day. Those
+                    # enrichments stay the business of processes 22/24/28 and 34-36.
+                    #
+                    # The gone-id pre-check of the "everything" wrappers is not lost:
+                    # f_notfoundfilter already excludes ids inside their retry window, and
+                    # f_tmdbfetchclassify records a fresh 34 from inside the details call.
+                    if intindex == 23:
+                        tf.f_tmdbmovietosql(lngid)
+                    elif intindex == 29:
+                        tf.f_tmdbserietosql(lngid)
+                    else:
+                        tf.f_tmdbpersontosql(lngid)
                 elif intindex == 34:
                     return tf.f_tmdbmoviereleasedatestosql(lngid)
                 elif intindex == 35:
@@ -587,7 +698,7 @@ SET autocommit = 1; """
                 return strprocessesexecuted
 
             # Handling new content, missing content and refreshing some content (Loop #2)
-            arrprocessscope = {17: 'new companies', 18: 'new networks', 19: 'watch provider catalogues', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
+            arrprocessscope = {17: 'new companies', 18: 'new networks', 19: 'watch provider catalogues', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 29: 'wikidata serie id fix', 30: 'wikidata person id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
             #if strnow.startswith("2026-04-20"):
             #    #arrprocessscope = {26: 'refreshing companies', 27: 'refreshing networks'}
             #    arrprocessscope = {0: 'nothing'}
