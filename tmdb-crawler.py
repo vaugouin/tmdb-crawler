@@ -277,7 +277,7 @@ SET autocommit = 1; """
                         f"WHERE NF.ENTITY_TYPE = '{strentitytype}' AND NF.ID_ENTITY = {stridcolumn} "
                         "AND NF.TIM_RETRY_AFTER > NOW()) ")
 
-            def f_wikidataidfixsql(strentitytype, strwikidatatable, strtmdbtable, stridcolumn):
+            def f_wikidataidfixsql(strentitytype, strwikidatatable, strtmdbtable, stridcolumn, strimdbprefix):
                 """
                 Candidate ids for the "wikidata id is not set" repair processes 23, 29, 30.
 
@@ -297,11 +297,24 @@ SET autocommit = 1; """
                     TMDb table to refresh (T_WC_TMDB_MOVIE / _SERIE / _PERSON)
                 stridcolumn : str
                     Primary key of strtmdbtable (ID_MOVIE / ID_SERIE / ID_PERSON)
+                strimdbprefix : str
+                    Prefix every IMDb id of this entity type carries, "tt" for a title
+                    (movie or series), "nm" for a name (person)
 
                 Returns:
                 --------
                 str
                     SQL exposing an `id` column, ready for f_runprocessscope
+
+                ⚠ THE IMDb PREFIX IS A PARAMETER BECAUSE IT IS NOT THE SAME FOR ALL
+                THREE, AND HARDCODING IT COST PROCESS 30 ITS ENTIRE FIRST RUN. On
+                2026-09-15 the filter read LIKE 'tt%' for every type, so the person
+                query matched zero rows: a person's P345 is a NAME id, nm0364509, never
+                a title id. The failure was silent in the worst way, the process ran,
+                reported no rows, wrote no count variable, and a candidate count built
+                on the same mistake answered a confident 0 while the export listed 720
+                persons. selenium-tmdb's three export queries had it right all along,
+                'nm%' in wikidata-id-person-fix.sql and 'tt%' in the other two.
 
                 ⚠ MIGRATED FROM V1 TO THE V2 STATEMENT MODEL, 2026-09-14, AND THE V1
                 VERSION WAS BLIND. Process 23 read T_WC_WIKIDATA_MOVIE_V1, where the QID,
@@ -365,7 +378,7 @@ SET autocommit = 1; """
                         "AND si.ID_PROPERTY = 'P345' AND (si.`RANK` IS NULL OR si.`RANK` <> 'deprecated') "
                         "INNER JOIN T_WC_WIKIDATA_EXTERNAL_ID_VALUE imdb ON imdb.ID_STATEMENT = si.ID_STATEMENT "
                         f"INNER JOIN {strtmdbtable} T1 ON imdb.VALUE_EXTERNAL_ID = T1.ID_IMDB "
-                        "WHERE imdb.VALUE_EXTERNAL_ID LIKE 'tt%' "
+                        f"WHERE imdb.VALUE_EXTERNAL_ID LIKE '{strimdbprefix}%' "
                         "AND (T1.ID_WIKIDATA IS NULL OR T1.ID_WIKIDATA = '' "
                         "OR T1.ID_WIKIDATA NOT REGEXP '^Q[0-9]+$') "
                         + f_notfoundfilter(strentitytype, f"T1.{stridcolumn}")
@@ -458,15 +471,15 @@ SET autocommit = 1; """
                 elif intindex == 23:
                     if strdattodayminus1 > strtmdbdatprev:
                         strcurrentprocess = f"{intindex}: refreshing movies when id wikidata is not set"
-                        strsql += f_wikidataidfixsql("movie", "T_WC_WIKIDATA_MOVIE", "T_WC_TMDB_MOVIE", "ID_MOVIE")
+                        strsql += f_wikidataidfixsql("movie", "T_WC_WIKIDATA_MOVIE", "T_WC_TMDB_MOVIE", "ID_MOVIE", "tt")
                 elif intindex == 29:
                     if strdattodayminus1 > strtmdbdatprev:
                         strcurrentprocess = f"{intindex}: refreshing series when id wikidata is not set"
-                        strsql += f_wikidataidfixsql("serie", "T_WC_WIKIDATA_SERIE", "T_WC_TMDB_SERIE", "ID_SERIE")
+                        strsql += f_wikidataidfixsql("serie", "T_WC_WIKIDATA_SERIE", "T_WC_TMDB_SERIE", "ID_SERIE", "tt")
                 elif intindex == 30:
                     if strdattodayminus1 > strtmdbdatprev:
                         strcurrentprocess = f"{intindex}: refreshing persons when id wikidata is not set"
-                        strsql += f_wikidataidfixsql("person", "T_WC_WIKIDATA_PERSON", "T_WC_TMDB_PERSON", "ID_PERSON")
+                        strsql += f_wikidataidfixsql("person", "T_WC_WIKIDATA_PERSON", "T_WC_TMDB_PERSON", "ID_PERSON", "nm")
                 elif intindex == 13:
                     if strdattodayminus1 > strtmdbdatprev:
                         strcurrentprocess = f"{intindex}: refreshing lists"

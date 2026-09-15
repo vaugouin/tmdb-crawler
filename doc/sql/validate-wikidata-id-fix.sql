@@ -129,6 +129,11 @@ WHERE ID_MOVIE IN (
 --    a relancer quand on veut, il ne depend d'aucun identifiant fige.
 --    Reference du 2026-09-14 : 1 873 films, 412 series, 720 personnes.
 --    Une baisse nette du cote films est la signature de la reparation.
+--
+--    ⚠ LE PREFIXE IMDb DIFFERE SELON LE TYPE, 'tt' pour un titre et 'nm' pour
+--    une personne. Le resultat du 2026-09-15 annonce 0 personne a reparer :
+--    c'est FAUX, ce bloc portait alors 'tt%' pour les trois, et le processus 30
+--    du crawler la meme erreur. Corrige ici et dans f_wikidataidfixsql.
 -- ---------------------------------------------------------------------------
 SET STATEMENT max_statement_time=300 FOR
 SELECT 'films' AS TYPE, COUNT(*) AS RESTE_A_REPARER FROM (
@@ -165,7 +170,7 @@ SELECT DISTINCT T1.ID_PERSON
          AND (si.`RANK` IS NULL OR si.`RANK` <> 'deprecated')
   INNER JOIN T_WC_WIKIDATA_EXTERNAL_ID_VALUE imdb ON imdb.ID_STATEMENT = si.ID_STATEMENT
   INNER JOIN T_WC_TMDB_PERSON T1 ON imdb.VALUE_EXTERNAL_ID = T1.ID_IMDB
-  WHERE imdb.VALUE_EXTERNAL_ID LIKE 'tt%'
+  WHERE imdb.VALUE_EXTERNAL_ID LIKE 'nm%'
     AND (T1.ID_WIKIDATA IS NULL OR T1.ID_WIKIDATA = ''
          OR T1.ID_WIKIDATA NOT REGEXP '^Q[0-9]+$')
 ) c;
