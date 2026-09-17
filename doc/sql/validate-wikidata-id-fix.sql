@@ -125,55 +125,63 @@ WHERE ID_MOVIE IN (
 );
 
 -- ---------------------------------------------------------------------------
--- 3. Le reste-a-faire par type. SEUL BLOC REUTILISABLE de ce fichier,
---    a relancer quand on veut, il ne depend d'aucun identifiant fige.
---    Reference du 2026-09-14 : 1 873 films, 412 series, 720 personnes.
---    Une baisse nette du cote films est la signature de la reparation.
+-- 3. Le reste-a-faire par type. SEUL BLOC REUTILISABLE de ce fichier, il ne
+--    depend d'aucun identifiant fige.
 --
---    ⚠ LE PREFIXE IMDb DIFFERE SELON LE TYPE, 'tt' pour un titre et 'nm' pour
---    une personne. Le resultat du 2026-09-15 annonce 0 personne a reparer :
---    c'est FAUX, ce bloc portait alors 'tt%' pour les trois, et le processus 30
---    du crawler la meme erreur. Corrige ici et dans f_wikidataidfixsql.
+--    Reference du 2026-09-14 : 1 873 films, 412 series, 720 personnes.
+--
+--    ⚠ TROIS INSTRUCTIONS SEPAREES, ET NON UN UNION ALL. Le 2026-09-17 les
+--    trois comptages ne faisaient qu'une instruction : le depassement de delai
+--    sur les personnes a emporte les trois, et le fichier de resultat n'a
+--    rendu aucun chiffre. Un budget par comptage, comme preprocess a un try
+--    par fichier .sql, pour qu'un lent n'emporte pas ses voisins.
+--
+--    ⚠ LES PERSONNES COUTENT BIEN PLUS CHER, d'ou leur budget a part. La
+--    requete doit descendre de Wikidata vers TMDb, la colonne
+--    VALUE_EXTERNAL_ID n'etant pas indexee, donc elle parcourt la table
+--    d'entites Wikidata en entier. Celle des personnes est beaucoup plus
+--    grande que celle des films. Ne PAS "optimiser" en EXISTS correle sur
+--    VALUE_EXTERNAL_ID : c'est le balayage par ligne qui a fait tourner le
+--    conteneur de selenium-tmdb plus d'une heure le 2026-09-02.
+--
+--    COUNT(DISTINCT) plutot que COUNT(*) sur une table derivee : meme
+--    resultat, sans materialiser l'ensemble intermediaire.
 -- ---------------------------------------------------------------------------
 SET STATEMENT max_statement_time=300 FOR
-SELECT 'films' AS TYPE, COUNT(*) AS RESTE_A_REPARER FROM (
-SELECT DISTINCT T1.ID_MOVIE
-  FROM T_WC_WIKIDATA_MOVIE W
-  INNER JOIN T_WC_WIKIDATA_STATEMENT si ON si.ID_WIKIDATA = W.ID_WIKIDATA
-         AND si.ID_PROPERTY = 'P345'
-         AND (si.`RANK` IS NULL OR si.`RANK` <> 'deprecated')
-  INNER JOIN T_WC_WIKIDATA_EXTERNAL_ID_VALUE imdb ON imdb.ID_STATEMENT = si.ID_STATEMENT
-  INNER JOIN T_WC_TMDB_MOVIE T1 ON imdb.VALUE_EXTERNAL_ID = T1.ID_IMDB
-  WHERE imdb.VALUE_EXTERNAL_ID LIKE 'tt%'
-    AND (T1.ID_WIKIDATA IS NULL OR T1.ID_WIKIDATA = ''
-         OR T1.ID_WIKIDATA NOT REGEXP '^Q[0-9]+$')
-) c
-UNION ALL
-SELECT 'series' AS TYPE, COUNT(*) AS RESTE_A_REPARER FROM (
-SELECT DISTINCT T1.ID_SERIE
-  FROM T_WC_WIKIDATA_SERIE W
-  INNER JOIN T_WC_WIKIDATA_STATEMENT si ON si.ID_WIKIDATA = W.ID_WIKIDATA
-         AND si.ID_PROPERTY = 'P345'
-         AND (si.`RANK` IS NULL OR si.`RANK` <> 'deprecated')
-  INNER JOIN T_WC_WIKIDATA_EXTERNAL_ID_VALUE imdb ON imdb.ID_STATEMENT = si.ID_STATEMENT
-  INNER JOIN T_WC_TMDB_SERIE T1 ON imdb.VALUE_EXTERNAL_ID = T1.ID_IMDB
-  WHERE imdb.VALUE_EXTERNAL_ID LIKE 'tt%'
-    AND (T1.ID_WIKIDATA IS NULL OR T1.ID_WIKIDATA = ''
-         OR T1.ID_WIKIDATA NOT REGEXP '^Q[0-9]+$')
-) c
-UNION ALL
-SELECT 'personnes' AS TYPE, COUNT(*) AS RESTE_A_REPARER FROM (
-SELECT DISTINCT T1.ID_PERSON
-  FROM T_WC_WIKIDATA_PERSON W
-  INNER JOIN T_WC_WIKIDATA_STATEMENT si ON si.ID_WIKIDATA = W.ID_WIKIDATA
-         AND si.ID_PROPERTY = 'P345'
-         AND (si.`RANK` IS NULL OR si.`RANK` <> 'deprecated')
-  INNER JOIN T_WC_WIKIDATA_EXTERNAL_ID_VALUE imdb ON imdb.ID_STATEMENT = si.ID_STATEMENT
-  INNER JOIN T_WC_TMDB_PERSON T1 ON imdb.VALUE_EXTERNAL_ID = T1.ID_IMDB
-  WHERE imdb.VALUE_EXTERNAL_ID LIKE 'nm%'
-    AND (T1.ID_WIKIDATA IS NULL OR T1.ID_WIKIDATA = ''
-         OR T1.ID_WIKIDATA NOT REGEXP '^Q[0-9]+$')
-) c;
+SELECT 'films' AS TYPE, COUNT(DISTINCT T1.ID_MOVIE) AS RESTE_A_REPARER
+FROM T_WC_WIKIDATA_MOVIE W
+INNER JOIN T_WC_WIKIDATA_STATEMENT si ON si.ID_WIKIDATA = W.ID_WIKIDATA
+       AND si.ID_PROPERTY = 'P345'
+       AND (si.`RANK` IS NULL OR si.`RANK` <> 'deprecated')
+INNER JOIN T_WC_WIKIDATA_EXTERNAL_ID_VALUE imdb ON imdb.ID_STATEMENT = si.ID_STATEMENT
+INNER JOIN T_WC_TMDB_MOVIE T1 ON imdb.VALUE_EXTERNAL_ID = T1.ID_IMDB
+WHERE imdb.VALUE_EXTERNAL_ID LIKE 'tt%'
+  AND (T1.ID_WIKIDATA IS NULL OR T1.ID_WIKIDATA = ''
+       OR T1.ID_WIKIDATA NOT REGEXP '^Q[0-9]+$');
+
+SET STATEMENT max_statement_time=300 FOR
+SELECT 'series' AS TYPE, COUNT(DISTINCT T1.ID_SERIE) AS RESTE_A_REPARER
+FROM T_WC_WIKIDATA_SERIE W
+INNER JOIN T_WC_WIKIDATA_STATEMENT si ON si.ID_WIKIDATA = W.ID_WIKIDATA
+       AND si.ID_PROPERTY = 'P345'
+       AND (si.`RANK` IS NULL OR si.`RANK` <> 'deprecated')
+INNER JOIN T_WC_WIKIDATA_EXTERNAL_ID_VALUE imdb ON imdb.ID_STATEMENT = si.ID_STATEMENT
+INNER JOIN T_WC_TMDB_SERIE T1 ON imdb.VALUE_EXTERNAL_ID = T1.ID_IMDB
+WHERE imdb.VALUE_EXTERNAL_ID LIKE 'tt%'
+  AND (T1.ID_WIKIDATA IS NULL OR T1.ID_WIKIDATA = ''
+       OR T1.ID_WIKIDATA NOT REGEXP '^Q[0-9]+$');
+
+SET STATEMENT max_statement_time=1800 FOR
+SELECT 'personnes' AS TYPE, COUNT(DISTINCT T1.ID_PERSON) AS RESTE_A_REPARER
+FROM T_WC_WIKIDATA_PERSON W
+INNER JOIN T_WC_WIKIDATA_STATEMENT si ON si.ID_WIKIDATA = W.ID_WIKIDATA
+       AND si.ID_PROPERTY = 'P345'
+       AND (si.`RANK` IS NULL OR si.`RANK` <> 'deprecated')
+INNER JOIN T_WC_WIKIDATA_EXTERNAL_ID_VALUE imdb ON imdb.ID_STATEMENT = si.ID_STATEMENT
+INNER JOIN T_WC_TMDB_PERSON T1 ON imdb.VALUE_EXTERNAL_ID = T1.ID_IMDB
+WHERE imdb.VALUE_EXTERNAL_ID LIKE 'nm%'
+  AND (T1.ID_WIKIDATA IS NULL OR T1.ID_WIKIDATA = ''
+       OR T1.ID_WIKIDATA NOT REGEXP '^Q[0-9]+$');
 
 -- ---------------------------------------------------------------------------
 -- 4. Les fiches encore vides parmi les 235, s'il en reste, pour enqueter.
