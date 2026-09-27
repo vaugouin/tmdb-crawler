@@ -25,7 +25,7 @@ Pipeline stages:
 - **Serving** — `fastapi-text2sql` (NL→SQL API + MCP server), `voice-agent`, `tmdb-front` (PHP web front-end).
 - **Evaluation** — `eval-text2sql`, `extract-movie-questions`.
 - **Maintenance & tooling** — `plex-duplicates`, `subtitle-translate`, `powershell`, `playwright-test`.
-- **Monitoring & observability** — `data-monitoring`.
+- **Monitoring & observability** — `data-monitoring`, `pipeline-3d` (three.js replay of one question's execution trace through `voice-agent` and `fastapi-text2sql`).
 
 **This repository's role:** Acquisition stage and the primary data source. Synchronises movies, TV series, persons, collections, keywords, networks, and production companies from the TMDb API into the `T_WC_TMDB_*` tables that the rest of the pipeline builds on. Its keyword output feeds `keywords-processing`; its entity tables feed `tmdb-movie-preprocess` and `tmdb-person-preprocess`.
 
