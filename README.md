@@ -210,6 +210,37 @@ The crawler maintains several server variables for monitoring:
 - Current operation status
 - Error tracking and recovery status
 
+### Resume after an interruption
+
+A run stopped before its end (`docker stop tmdb-crawler`, crash, MySQL error)
+resumes where it was at the next start, instead of starting the whole sequence
+over. The mechanism is the one of `wikipedia-crawler`: state kept in server
+variables, written as the run goes, so it survives even a SIGKILL.
+
+- `strtmdbcrawlerresumeprocess` is set at the start of every process and emptied
+  only when a run reaches its end. Non-empty at startup, it means the previous run
+  was interrupted there: the new run skips the processes before it, in the
+  execution order 17 … 27, 51-53, 61-69, 22 … 36, and starts again at that one.
+- `strtmdbcrawlerresumeid` is the last id the current process finished. The
+  processes whose query is ordered by id (1, 12, 14-18, 23, 29-33) resume after it.
+  The others need no position: their query already leaves out what was done
+  (completion column, `TIM_UPDATED`, record now present, changes date cursor,
+  missing-image gap query).
+- `strtmdbcrawlerresumeimportdateprev` keeps the ID-import date read when the run
+  started, restored on resume, so processes 13, 16, 23, 29 and 30, gated on a new
+  import, still run when the run is resumed after that import.
+- The ID-export import (41-47) resumes file by file: each file successfully
+  imported records its export date in `strtmdbcrawlertmdbid<type>exportdate`, and a
+  file already imported for yesterday's export is not downloaded again.
+- `strtmdbcrawlerresumeattempts` guards against a process that stops the crawler
+  every time: after 3 consecutive resumes without getting past the same process,
+  the next run starts from the beginning, so the processes before it are not
+  starved.
+
+A resumed run continues `strtmdbcrawlerprocessesexecuted` (with a `resumed,`
+marker) and keeps the counters of the interrupted process. The resume query is in
+[doc/sql/monitoring.sql](doc/sql/monitoring.sql).
+
 ### ID-export import health (per file)
 
 After each daily ID-export file is bulk-loaded, the crawler writes per-file server

@@ -312,3 +312,22 @@ FROM T_WC_TMDB_SERIE_WATCH_PROVIDER association_row
 LEFT JOIN T_WC_TMDB_WATCH_PROVIDER provider
        ON provider.ID_PROVIDER = association_row.ID_PROVIDER
 WHERE provider.ID_PROVIDER IS NULL OR provider.DELETED = 1;
+
+-- -----------------------------------------------------------------------------
+-- Resume after an interruption (docker stop, crash). Reads: an empty
+-- strtmdbcrawlerresumeprocess means the last run reached its end; a value means
+-- the crawler is running in that process, or was stopped there and the next start
+-- resumes at it, after strtmdbcrawlerresumeid for the processes ordered by id.
+-- strtmdbcrawlerresumeattempts above 0 while the crawler is not running means the
+-- same process keeps stopping the run; at 3 the next run starts from the beginning.
+-- The *exportdate rows give the export date each ID file was last imported for, a
+-- file already at yesterday's date is skipped by an import that is resumed.
+-- -----------------------------------------------------------------------------
+SELECT VAR_NAME, VAR_VALUE, TIM_UPDATED
+FROM T_WC_SERVER_VARIABLE
+WHERE DELETED = 0
+  AND (VAR_NAME LIKE 'strtmdbcrawlerresume%'
+       OR VAR_NAME LIKE 'strtmdbcrawlertmdbid%exportdate'
+       OR VAR_NAME IN ('strtmdbcrawlercurrentprocess', 'strtmdbcrawlerprocessesexecuted',
+                       'strtmdbcrawlerstartdatetime', 'strtmdbcrawlerenddatetime'))
+ORDER BY VAR_NAME;

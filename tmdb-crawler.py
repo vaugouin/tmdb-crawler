@@ -22,6 +22,44 @@ strimdbdatprev = cp.f_getservervariable("strtmdbcrawlerimdbidimportdate",0)
 print(f"strtmdbdatprev={strtmdbdatprev}")
 print(f"strimdbdatprev={strimdbdatprev}")
 
+# Resume after an interruption (docker stop, crash, MySQL error), same mechanism as
+# wikipedia-crawler. strtmdbcrawlerresumeprocess holds the process that was running
+# and is only cleared when a run reaches its end, so a non-empty value at startup
+# means the previous run died on the way: this run skips what that one already did
+# and starts again at the interrupted process. strtmdbcrawlerresumeid holds the last
+# id that process finished, used by the processes whose query is ordered by id.
+#
+# The run context is restored too. The import date gate of processes 13, 16, 23,
+# 29 and 30 compares against strtmdbdatprev, which the interrupted run already moved
+# forward when its ID files were imported: without the saved value, a run stopped
+# during process 23 would resume with 23 gated off and skip it for the day.
+#
+# GUARD against a poison process. A process that crashes the crawler every time
+# would, with a plain resume, pin every following run on itself and starve all the
+# processes before it (new movies, new persons...). After INT_RESUME_MAX_ATTEMPTS
+# consecutive resumes on the same process, the run starts from the beginning again.
+INT_RESUME_MAX_ATTEMPTS = 3
+strresumeprocess = cp.f_getservervariable("strtmdbcrawlerresumeprocess",0)
+strresumeid = cp.f_getservervariable("strtmdbcrawlerresumeid",0)
+strresumeattempts = cp.f_getservervariable("strtmdbcrawlerresumeattempts",0)
+lngresumeattempts = int(strresumeattempts) if strresumeattempts.isdigit() else 0
+intresuming = strresumeprocess != ""
+if intresuming and lngresumeattempts >= INT_RESUME_MAX_ATTEMPTS:
+    print(f"⚠️ Process {strresumeprocess} was already resumed {lngresumeattempts} times without "
+          f"getting past it: resume abandoned, this run starts from the beginning.")
+    intresuming = False
+if intresuming:
+    lngresumeattempts += 1
+    strtmdbdatprev = cp.f_getservervariable("strtmdbcrawlerresumeimportdateprev",0)
+    print(f"⏯️ Resuming the interrupted run at process {strresumeprocess} after id '{strresumeid}' "
+          f"(attempt {lngresumeattempts} of {INT_RESUME_MAX_ATTEMPTS}), strtmdbdatprev restored to '{strtmdbdatprev}'")
+else:
+    lngresumeattempts = 0
+    strresumeprocess = ""
+    strresumeid = ""
+    cp.f_setservervariable("strtmdbcrawlerresumeimportdateprev",strtmdbdatprev,"TMDb ID import date read at the start of the current TMDb crawler run, restored when the run is resumed",0)
+cp.f_setservervariable("strtmdbcrawlerresumeattempts",str(lngresumeattempts),"Consecutive resumes of the TMDb crawler on the same interrupted process",0)
+
 try:
     conn = cp.f_getconnection()
     with conn:
@@ -33,12 +71,19 @@ try:
             cp.f_setservervariable("strtmdbcrawlerstartdatetime",strnow,"Date and time of the last start of the TMDb API crawler",0)
             strprocessesexecutedprevious = cp.f_getservervariable("strtmdbcrawlerprocessesexecuted",0)
             strprocessesexecuteddesc = "List of processes executed in the TMDb API crawler"
-            cp.f_setservervariable("strtmdbcrawlerprocessesexecutedprevious",strprocessesexecutedprevious,strprocessesexecuteddesc + " (previous execution)",0)
-            strprocessesexecuted = ""
+            # A resumed run continues the interrupted one: it extends its list of
+            # processes and leaves the "previous" values alone, which would otherwise
+            # be overwritten by the interrupted run's partial list and its "RUNNING".
+            if intresuming:
+                strprocessesexecuted = strprocessesexecutedprevious + "resumed, "
+            else:
+                cp.f_setservervariable("strtmdbcrawlerprocessesexecutedprevious",strprocessesexecutedprevious,strprocessesexecuteddesc + " (previous execution)",0)
+                strprocessesexecuted = ""
             cp.f_setservervariable("strtmdbcrawlerprocessesexecuted",strprocessesexecuted,strprocessesexecuteddesc,0)
             strtotalruntimedesc = "Total runtime of the TMDb crawler"
-            strtotalruntimeprevious = cp.f_getservervariable("strtmdbcrawlertotalruntime",0)
-            cp.f_setservervariable("strtmdbcrawlertotalruntimeprevious",strtotalruntimeprevious,strtotalruntimedesc + " (previous execution)",0)
+            if not intresuming:
+                strtotalruntimeprevious = cp.f_getservervariable("strtmdbcrawlertotalruntime",0)
+                cp.f_setservervariable("strtmdbcrawlertotalruntimeprevious",strtotalruntimeprevious,strtotalruntimedesc + " (previous execution)",0)
             strtotalruntime = "RUNNING"
             cp.f_setservervariable("strtmdbcrawlertotalruntime",strtotalruntime,strtotalruntimedesc,0)
             # Ledger of the TMDb ids that answer 34, read by every process query and
@@ -157,7 +202,15 @@ id = JSON_VALUE(@json_row, '$.id'),
 name = JSON_VALUE(@json_row, '$.name'); """
                     else:
                         strtmdbidsqltable = ""
-                    if strtmdbidsqltable != "":
+                    # Resume at file level: an interrupted import restarts at the first
+                    # file not yet imported for this export date, instead of downloading
+                    # and re-importing all seven. The import stage stays outside the
+                    # process resume marker, so a run resumed on a later day still
+                    # imports that day's new files.
+                    strtmdbidexportdatevarname = "strtmdbcrawlertmdbid"+strtmdbidfilename+"exportdate"
+                    if strtmdbidsqltable != "" and cp.f_getservervariable(strtmdbidexportdatevarname,0) == strdattodayminus1:
+                        print(f"{inttmdbidfilename}: {strtmdbidfilename} export of {strdattodayminus1} already imported, skipped")
+                    elif strtmdbidsqltable != "":
                         print(f"{inttmdbidfilename}: {strtmdbidfilename} -> {strtmdbidsqltable}")
                         lngcount = 0
                         strprocessesexecuted += str(inttmdbidfilename) + ", "
@@ -248,6 +301,7 @@ SET autocommit = 1; """
                             print(f"Import {strlocaljsonfilename} to {strtmdbidsqltable} done!")
                             strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
                             cp.f_setservervariable("strtmdbcrawlertmdbid"+strtmdbidfilename+"enddate",strnow,"Date and time of the successful import of the TMDb "+strtmdbidfilename+" ID import file",0)
+                            cp.f_setservervariable(strtmdbidexportdatevarname,strdattodayminus1,"Export date of the last successfully imported TMDb "+strtmdbidfilename+" ID file",0)
                             # File is read in the database so we delete it: .json.gz and .json file
                             print(f"Remove {strlocalgzfilename}")
                             os.remove(strlocalgzfilename)
@@ -676,8 +730,95 @@ SET autocommit = 1; """
                         return False
                     raise
 
+            # The four process loops of a run, in execution order. Declared together
+            # because the resume mechanism needs the whole order before the first one
+            # starts. Loop #1 (ID file import) is not in it: it resumes file by file.
+            # Handling new content, missing content and refreshing some content (Loop #2)
+            arrprocessscopenew = {17: 'new companies', 18: 'new networks', 19: 'watch provider catalogues', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 29: 'wikidata serie id fix', 30: 'wikidata person id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
+            #if strnow.startswith("2026-04-20"):
+            #    #arrprocessscopenew = {26: 'refreshing companies', 27: 'refreshing networks'}
+            #    arrprocessscopenew = {0: 'nothing'}
+            # Updating changed contents (Loop #3)
+            arrtmdbchanges = {51: 'movie', 52: 'person', 53: 'serie'}
+            #arrtmdbchanges = {53: 'serie'}
+            #arrtmdbchanges = {51: 'movie', 52:'person'}
+            #arrtmdbchanges = {0: 'nothing'}
+            #if strnow.startswith("2026-04-20"):
+            #    arrtmdbchanges = {0: 'nothing'}
+            # Handling missing images (Loop #4)
+            arrmissingimages = {61: 'movie images', 62: 'person images', 63: 'serie images', 64: 'collection images', 65: 'company images', 66: 'network images', 67: 'movie lang images', 68: 'serie lang images', 69: 'collection lang images'}
+            #arrmissingimages = {61: 'movie images'}
+            #if strnow.startswith("2026-04-20"):
+            #    arrmissingimages = {0: 'nothing'}
+            # Refreshing contents (Loop #5)
+            # Backfills run after the normal 30-day refresh: titles refreshed in
+            # this pass already received the new snapshots and are therefore not
+            # selected a second time by processes 34-36.
+            arrprocessscoperefresh = {22: 'refreshing movies', 28: 'refreshing series', 24: 'refreshing persons', 34: 'movie release dates', 35: 'movie watch providers', 36: 'series watch providers'}
+            #if strnow.startswith("2026-04-20"):
+            #    arrprocessscoperefresh = {28: 'refreshing series', 24: 'refreshing persons'}
+            arrrunorder = list(arrprocessscopenew) + list(arrtmdbchanges) + list(arrmissingimages) + list(arrprocessscoperefresh)
+
+            # Position of the interrupted process in arrrunorder, -1 for a fresh run.
+            # A process that is no longer in the order (renumbered, removed from a
+            # scope) cannot be located: the run then starts from the beginning.
+            lngresumeposition = -1
+            if intresuming:
+                if strresumeprocess.isdigit() and int(strresumeprocess) in arrrunorder:
+                    lngresumeposition = arrrunorder.index(int(strresumeprocess))
+                else:
+                    print(f"⚠️ Interrupted process '{strresumeprocess}' is not in the run order, starting from the beginning")
+
+            # Processes whose query is ordered by id ascending. Only for them does
+            # "skip every id up to the last one finished" resume at the right place.
+            # The others need no resume id: their query leaves out what was done,
+            # through a completion column (TIM_CREDITS_COMPLETED, TIM_*_COMPLETED),
+            # TIM_UPDATED, or the record now existing.
+            arrprocessorderedbyid = {1, 12, 14, 15, 16, 17, 18, 23, 29, 30, 31, 32, 33}
+
+            def f_resumeskip(intindex):
+                """
+                Tell whether the interrupted run already went past this process.
+
+                Parameters:
+                -----------
+                intindex : int
+                    Process number, as listed in arrrunorder
+
+                Returns:
+                --------
+                bool
+                    True when the process comes before the interrupted one and must be
+                    skipped by this resumed run
+                """
+                if arrrunorder.index(intindex) < lngresumeposition:
+                    print(f"{intindex}: already done by the interrupted run, skipped")
+                    return True
+                return False
+
+            def f_resumeisinterrupted(intindex):
+                """True for the very process the interrupted run was in."""
+                return lngresumeposition >= 0 and arrrunorder.index(intindex) == lngresumeposition
+
+            def f_resumemark(intindex):
+                """
+                Record that the run is now in this process, so an interruption resumes here.
+
+                The resume id and the attempt counter belong to the interrupted process:
+                they are kept while the run is still in it (a second interruption before
+                its first row must not lose the position), and reset once the run moves
+                on to a later process, which proves the interrupted one is past.
+                """
+                cp.f_setservervariable("strtmdbcrawlerresumeprocess",str(intindex),"Process the TMDb crawler is in, where it resumes after an interruption",0)
+                if not f_resumeisinterrupted(intindex):
+                    cp.f_setservervariable("strtmdbcrawlerresumeid","","Last id finished by the current process of the TMDb crawler, where it resumes after an interruption",0)
+                    cp.f_setservervariable("strtmdbcrawlerresumeattempts","0","Consecutive resumes of the TMDb crawler on the same interrupted process",0)
+
             def f_runprocessscope(arrprocessscope, strprocessesexecuted):
                 for intindex, strdesc in arrprocessscope.items():
+                    if f_resumeskip(intindex):
+                        continue
+                    f_resumemark(intindex)
                     strprocessesexecuted += str(intindex) + ", "
                     cp.f_setservervariable("strtmdbcrawlerprocessesexecuted",strprocessesexecuted,strprocessesexecuteddesc,0)
                     strcurrentprocess, strsql = f_getprocesssql(intindex)
@@ -688,6 +829,16 @@ SET autocommit = 1; """
                         lngcount = 0
                         strdescvarname = strdesc.replace(" ","")
                         print("strdescvarname", strdescvarname)
+                        strcountvarname = "strtmdbcrawlerprocess"+str(intindex)+strdescvarname+"count"
+                        lngresumeid = None
+                        if f_resumeisinterrupted(intindex):
+                            # Carry on the interrupted count rather than restart it at 0
+                            strcountprevious = cp.f_getservervariable(strcountvarname,0)
+                            if strcountprevious.isdigit():
+                                lngcount = int(strcountprevious)
+                            if intindex in arrprocessorderedbyid and strresumeid.isdigit():
+                                lngresumeid = int(strresumeid)
+                                print(f"{intindex}: resuming after id {lngresumeid}, count carried on from {lngcount}")
                         if intindex == 28:
                             lngprocess28timebudgetremaining[0] = lngseasonsepisodestimebudgetinitial
                             print(f"Process 28: seasons/episodes time budget set to {lngprocess28timebudgetremaining[0]:.0f}s")
@@ -695,13 +846,18 @@ SET autocommit = 1; """
                         lngrowcount = cursor.rowcount
                         print(f"{lngrowcount} lines")
                         results = cursor.fetchall()
+                        if lngresumeid is not None:
+                            lngrowcountbefore = len(results)
+                            results = [row for row in results if row['id'] > lngresumeid]
+                            print(f"{lngrowcountbefore - len(results)} lines already done by the interrupted run, {len(results)} left")
                         for row in results:
                             lngid = row['id']
                             print(f"{strdesc} id: {lngid}")
                             if not f_processrowwithmysqlguard(intindex, row, strdesc):
                                 continue
                             lngcount += 1
-                            cp.f_setservervariable("strtmdbcrawlerprocess"+str(intindex)+strdescvarname+"count",str(lngcount),"Count of rows processed for process "+str(intindex)+" : "+strdesc+"",0)
+                            cp.f_setservervariable(strcountvarname,str(lngcount),"Count of rows processed for process "+str(intindex)+" : "+strdesc+"",0)
+                            cp.f_setservervariable("strtmdbcrawlerresumeid",str(lngid),"Last id finished by the current process of the TMDb crawler, where it resumes after an interruption",0)
                             strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
                             cp.f_setservervariable("strtmdbcrawlerdatetime",strnow,"Date and time of the last crawled record using the TMDb API",0)
                             if intindex == 28 and lngprocess28timebudgetremaining[0] < 0:
@@ -711,24 +867,19 @@ SET autocommit = 1; """
                 return strprocessesexecuted
 
             # Handling new content, missing content and refreshing some content (Loop #2)
-            arrprocessscope = {17: 'new companies', 18: 'new networks', 19: 'watch provider catalogues', 12: 'new keywords', 1: 'new collections', 2:'new movies', 3:'new persons', 4: 'new series', 13:'refresh lists', 14:'deleted movies', 15:'deleted persons', 16: 'deleted series', 23: 'wikidata movie id fix', 29: 'wikidata serie id fix', 30: 'wikidata person id fix', 31: 'missing persons', 32: 'missing movies', 33: 'missing series', 25: 'refreshing collections', 26: 'refreshing companies', 27: 'refreshing networks'}
-            #if strnow.startswith("2026-04-20"):
-            #    #arrprocessscope = {26: 'refreshing companies', 27: 'refreshing networks'}
-            #    arrprocessscope = {0: 'nothing'}
-            strprocessesexecuted = f_runprocessscope(arrprocessscope, strprocessesexecuted)
+            strprocessesexecuted = f_runprocessscope(arrprocessscopenew, strprocessesexecuted)
             strsql = ""
-            
+
             # Now updating changed contents (Loop #3)
+            # No resume id here: the date cursor already is one. An interrupted day
+            # was not advanced, so the resumed run starts that day over.
             strnowdate = datetime.now(cp.paris_tz).strftime("%Y-%m-%d")
-            arrtmdbchanges = {51: 'movie', 52: 'person', 53: 'serie'}
-            #arrtmdbchanges = {53: 'serie'}
-            #arrtmdbchanges = {51: 'movie', 52:'person'}
-            #arrtmdbchanges = {0: 'nothing'}
-            #if strnow.startswith("2026-04-20"):
-            #    arrtmdbchanges = {0: 'nothing'}
             lngchangesseasonsepisodestimebudget = lngseasonsepisodestimebudgetinitial
             print(f"Changes loop: seasons/episodes time budget set to {lngchangesseasonsepisodestimebudget:.0f}s")
             for inttmdbchanges,strtmdbchanges in arrtmdbchanges.items():
+                if f_resumeskip(inttmdbchanges):
+                    continue
+                f_resumemark(inttmdbchanges)
                 strprocessesexecuted += str(inttmdbchanges) + ", "
                 cp.f_setservervariable("strtmdbcrawlerprocessesexecuted",strprocessesexecuted,strprocessesexecuteddesc,0)
                 strtmdbchangesdatevarname = "strtmdbcrawlerchanges" + strtmdbchanges + "date"
@@ -1131,11 +1282,11 @@ WHERE c.DELETED = 0
                 return lngcount, lnginsertcount
 
             # Now handling missing images (Loop #4)
-            arrmissingimages = {61: 'movie images', 62: 'person images', 63: 'serie images', 64: 'collection images', 65: 'company images', 66: 'network images', 67: 'movie lang images', 68: 'serie lang images', 69: 'collection lang images'}
-            #arrmissingimages = {61: 'movie images'}
-            #if strnow.startswith("2026-04-20"):
-            #    arrmissingimages = {0: 'nothing'}
+            # No resume id here either: the gap query only returns what is still missing.
             for intimageindex, strimagedesc in arrmissingimages.items():
+                if f_resumeskip(intimageindex):
+                    continue
+                f_resumemark(intimageindex)
                 strprocessesexecuted += str(intimageindex) + ", "
                 cp.f_setservervariable("strtmdbcrawlerprocessesexecuted",strprocessesexecuted,strprocessesexecuteddesc,0)
                 strcurrentprocess = f"{intimageindex}: processing missing {strimagedesc}"
@@ -1155,16 +1306,14 @@ WHERE c.DELETED = 0
                 print("------------------------------------------")
 
             # Now handling refreshing contents (Loop #5)
-            # Backfills run after the normal 30-day refresh: titles refreshed in
-            # this pass already received the new snapshots and are therefore not
-            # selected a second time by processes 34-36.
-            arrprocessscope = {22: 'refreshing movies', 28: 'refreshing series', 24: 'refreshing persons', 34: 'movie release dates', 35: 'movie watch providers', 36: 'series watch providers'}
-            #if strnow.startswith("2026-04-20"):
-            #    arrprocessscope = {28: 'refreshing series', 24: 'refreshing persons'}
-            strprocessesexecuted = f_runprocessscope(arrprocessscope, strprocessesexecuted)
+            strprocessesexecuted = f_runprocessscope(arrprocessscoperefresh, strprocessesexecuted)
 
             strcurrentprocess = ""
             cp.f_setservervariable("strtmdbcrawlercurrentprocess",strcurrentprocess,"Current process in the TMDb API crawler",0)
+            # The run reached its end: nothing to resume at the next start.
+            cp.f_setservervariable("strtmdbcrawlerresumeprocess","","Process the TMDb crawler is in, where it resumes after an interruption",0)
+            cp.f_setservervariable("strtmdbcrawlerresumeid","","Last id finished by the current process of the TMDb crawler, where it resumes after an interruption",0)
+            cp.f_setservervariable("strtmdbcrawlerresumeattempts","0","Consecutive resumes of the TMDb crawler on the same interrupted process",0)
             # Ledger health, watched from the server-variable dashboard: a sudden jump
             # in the "new" counter means TMDb answered 34 on a batch of ids, which is
             # worth a look before the widening retry windows hide them for months.

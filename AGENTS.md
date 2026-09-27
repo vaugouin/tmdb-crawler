@@ -100,6 +100,24 @@ type strings are `movie`, `person`, `serie`, `collection`, `company`, `network`,
 
 ---
 
+## Resume after an interruption
+
+A run stopped by `docker stop`, a crash or a MySQL error resumes at the interrupted
+process on the next start (README, "Resume after an interruption"). The run order is
+built from the four scope dicts declared together before `f_runprocessscope`
+(`arrprocessscopenew`, `arrtmdbchanges`, `arrmissingimages`, `arrprocessscoperefresh`).
+When adding a process:
+
+- Put it in one of those dicts. A loop of its own must call `f_resumeskip(intindex)`
+  then `f_resumemark(intindex)` at the top of each iteration, like the changes and
+  image loops, otherwise an interruption inside it resumes at the wrong place.
+- If its query is ordered by id ascending, add it to `arrprocessorderedbyid`, so a
+  resume skips the ids already done (harmless when the query also excludes them).
+  A process ordered by popularity or `TIM_UPDATED` must not be added: skipping "ids
+  up to the last one" would then drop unprocessed rows.
+- Every row must stay safe to process twice: the row running when the container was
+  stopped is replayed.
+
 ## Additive release/watch snapshots (TMDB-CRAWLER-020 / -030)
 
 `T_WC_TMDB_MOVIE.DAT_RELEASE` remains owned by the established Movie Details path
