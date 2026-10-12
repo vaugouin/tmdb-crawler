@@ -5,7 +5,7 @@
 --
 -- A LANCER :
 --   ~/docker/tools/runsqlvaugouindb.sh \
---     ~/docker/tmdb-crawler/doc/sql/validate-wikidata-id-fix.sql
+--     ~/docker/tmdb-crawler/doc/sql/archive/validate-wikidata-id-fix.sql
 --   -> ecrit validate-wikidata-id-fix-AAAAMMJJ.txt a cote, pret a committer.
 --   Ce script passe --force de lui-meme, donc un bloc en erreur n'emporte pas
 --   les suivants, et les erreurs sont recopiees en fin de resultat.
