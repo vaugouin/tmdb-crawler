@@ -1,0 +1,964 @@
+-- check-tmdb-crew-jobs.sql
+-- run on vaugouindb (container damp-vaugouin-com-mariadb-1) at 2026-10-16 09:50:24
+--
++----------------+---------------+
+| DISTINCT_PAIRS | DISTINCT_JOBS |
++----------------+---------------+
+|            952 |           934 |
++----------------+---------------+
++-------------------+----------------------------------------------------------+-------------+
+| CREW_DEPARTMENT   | CREW_JOB                                                 | CREDIT_ROWS |
++-------------------+----------------------------------------------------------+-------------+
+| Actors            | Stunt Double                                             |           9 |
+| Actors            | Actor                                                    |           4 |
+| Actors            | Voice                                                    |           2 |
+| Art               | Production Design                                        |      137697 |
+| Art               | Art Direction                                            |      134007 |
+| Art               | Set Decoration                                           |       58009 |
+| Art               | Storyboard Artist                                        |       42668 |
+| Art               | Background Designer                                      |       30936 |
+| Art               | Set Designer                                             |       21283 |
+| Art               | Property Master                                          |       20534 |
+| Art               | Set Dresser                                              |       19909 |
+| Art               | Graphic Designer                                         |       19409 |
+| Art               | Assistant Art Director                                   |       14765 |
+| Art               | Props                                                    |       13887 |
+| Art               | Art Designer                                             |       12721 |
+| Art               | Art Department Assistant                                 |       11559 |
+| Art               | Title Designer                                           |        9572 |
+| Art               | Assistant Production Design                              |        6282 |
+| Art               | Prop Designer                                            |        6092 |
+| Art               | Decorator                                                |        5806 |
+| Art               | Construction Coordinator                                 |        5739 |
+| Art               | Painter                                                  |        5683 |
+| Art               | Art Department Coordinator                               |        5674 |
+| Art               | Assistant Property Master                                |        5340 |
+| Art               | Assistant Director of Photography                        |        4999 |
+| Art               | Location Scout                                           |        4604 |
+| Art               | Concept Artist                                           |        3633 |
+| Art               | Assistant Set Decoration                                 |        3354 |
+| Art               | Leadman                                                  |        3227 |
+| Art               | Supervising Art Director                                 |        3139 |
+| Art               | Creative Director                                        |        2752 |
+| Art               | Swing                                                    |        2159 |
+| Art               | Other                                                    |        1949 |
+| Art               | Construction Foreman                                     |        1897 |
+| Art               | Construction Manager                                     |        1874 |
+| Art               | Sculptor                                                 |        1549 |
+| Art               | Set Decoration Buyer                                     |        1418 |
+| Art               | Greensman                                                |        1361 |
+| Art               | Art Department Manager                                   |        1336 |
+| Art               | Assistant Decorator                                      |        1111 |
+| Art               | Draughtsman                                              |        1108 |
+| Art               | Conceptual Design                                        |        1105 |
+| Art               | Runner Art Department                                    |        1074 |
+| Art               | Property Buyer                                           |        1023 |
+| Art               | Additional Storyboarding                                 |        1009 |
+| Art               | Standby Art Director                                     |         958 |
+| Art               | Standby Property Master                                  |         942 |
+| Art               | Construction Grip                                        |         911 |
+| Art               | Original Series Design                                   |         899 |
+| Art               | Settings                                                 |         897 |
+| Art               | Main Title Designer                                      |         779 |
+| Art               | Assistant Set Designer                                   |         736 |
+| Art               | Dressing Prop                                            |         724 |
+| Art               | Set Decorating Coordinator                               |         687 |
+| Art               | Production Illustrator                                   |         662 |
+| Art               | Art Department Trainee                                   |         655 |
+| Art               | Storyboard Designer                                      |         612 |
+| Art               | Interior Designer                                        |         605 |
+| Art               | Standby Painter                                          |         599 |
+| Art               | First Assistant Art Direction                            |         589 |
+| Art               | Conceptual Illustrator                                   |         575 |
+| Art               | Special Props                                            |         555 |
+| Art               | Opening Title Sequence                                   |         536 |
+| Art               | Lead Set Dresser                                         |         486 |
+| Art               | Set Supervisor                                           |         464 |
+| Art               | Set Painter                                              |         452 |
+| Art               | Assistant Set Dresser                                    |         451 |
+| Art               | Helping Hand                                             |         375 |
+| Art               | Construction Buyer                                       |         341 |
+| Art               | On Set Props                                             |         313 |
+| Art               | Head Carpenter                                           |         308 |
+| Art               | Storyboard Assistant                                     |         307 |
+| Art               | Second Assistant Art Director                            |         300 |
+| Art               | Standby Carpenter                                        |         293 |
+| Art               | Set Buyer                                                |         290 |
+| Art               | Additional Set Dresser                                   |         272 |
+| Art               | Title Illustration                                       |         270 |
+| Art               | Property Builder                                         |         260 |
+| Art               | Lead Painter                                             |         252 |
+| Art               | Paint Coordinator                                        |         244 |
+| Art               | Web Designer                                             |         243 |
+| Art               | Textile Artist                                           |         233 |
+| Art               | Additional Construction                                  |         233 |
+| Art               | Set Propsman                                             |         184 |
+| Art               | Co-Art Director                                          |         178 |
+| Art               | Set Dressing Buyer                                       |         141 |
+| Art               | Supervising Carpenter                                    |         138 |
+| Art               | Art Direction Intern                                     |         133 |
+| Art               | Property Graphic Designer                                |         115 |
+| Art               | Key Construction Grip                                    |         115 |
+| Art               | Gun Wrangler                                             |         103 |
+| Art               | Head Decorator                                           |         100 |
+| Art               | Petty Cash Buyer                                         |          97 |
+| Art               | Daily Grip                                               |          90 |
+| Art               | Head Greensman                                           |          86 |
+| Art               | Digital Storyboarding                                    |          84 |
+| Art               | Key Carpenter                                            |          83 |
+| Art               | Assistant Set Propsman                                   |          77 |
+| Art               | Sign Painter                                             |          53 |
+| Art               | On Set Key Props                                         |          42 |
+| Art               | On Set Computer Graphics                                 |          36 |
+| Art               | Shop Electric                                            |          35 |
+| Art               | Head Designer                                            |          29 |
+| Art               | First Assistant Property Master                          |          23 |
+| Art               | Key Set Painter                                          |          22 |
+| Art               | Assistant Set Decoration Buyer                           |          20 |
+| Art               | Additional Construction Grip                             |          16 |
+| Art               | Additional Key Construction Grip                         |          13 |
+| Camera            | Director of Photography                                  |      428088 |
+| Camera            | Camera Operator                                          |      139013 |
+| Camera            | Assistant Camera                                         |       47106 |
+| Camera            | Still Photographer                                       |       41381 |
+| Camera            | Grip                                                     |       34141 |
+| Camera            | First Assistant Camera                                   |       25834 |
+| Camera            | Key Grip                                                 |       22092 |
+| Camera            | Second Assistant Camera                                  |       19396 |
+| Camera            | Steadicam Operator                                       |       12115 |
+| Camera            | Digital Imaging Technician                               |        7532 |
+| Camera            | Focus Puller                                             |        7530 |
+| Camera            | Best Boy Grip                                            |        7010 |
+| Camera            | Dolly Grip                                               |        5613 |
+| Camera            | Additional Photography                                   |        5562 |
+| Camera            | Additional Camera                                        |        5401 |
+| Camera            | Second Unit Director of Photography                      |        4982 |
+| Camera            | "B" Camera Operator                                      |        4733 |
+| Camera            | First Assistant "A" Camera                               |        4569 |
+| Camera            | Clapper Loader                                           |        4537 |
+| Camera            | First Assistant "B" Camera                               |        3736 |
+| Camera            | BTS Photographer                                         |        3500 |
+| Camera            | Second Assistant "A" Camera                              |        3243 |
+| Camera            | "A" Camera Operator                                      |        3035 |
+| Camera            | Second Assistant "B" Camera                              |        2693 |
+| Camera            | Camera Technician                                        |        2328 |
+| Camera            | Camera Production Assistant                              |        2286 |
+| Camera            | Camera Trainee                                           |        2256 |
+| Camera            | Additional Director of Photography                       |        2079 |
+| Camera            | Camera Loader                                            |        1739 |
+| Camera            | Set Photographer                                         |        1638 |
+| Camera            | Camera Department Manager                                |        1545 |
+| Camera            | Camera Supervisor                                        |        1516 |
+| Camera            | BTS Footage                                              |        1464 |
+| Camera            | BTS Videographer                                         |        1335 |
+| Camera            | Data Wrangler                                            |        1296 |
+| Camera            | Drone Pilot                                              |        1223 |
+| Camera            | Drone Cinematographer                                    |        1111 |
+| Camera            | Assistant Grip                                           |        1052 |
+| Camera            | Underwater Camera                                        |        1030 |
+| Camera            | Aerial Camera                                            |         948 |
+| Camera            | Additional Grip                                          |         936 |
+| Camera            | Aerial Director of Photography                           |         916 |
+| Camera            | Other                                                    |         817 |
+| Camera            | Camera Department Production Assistant                   |         778 |
+| Camera            | Camera Intern                                            |         679 |
+| Camera            | Camera Car                                               |         622 |
+| Camera            | "C" Camera Operator                                      |         575 |
+| Camera            | Additional First Assistant Camera                        |         572 |
+| Camera            | Third Assistant Camera                                   |         526 |
+| Camera            | First Assistant "C" Camera                               |         468 |
+| Camera            | Additional Second Assistant Camera                       |         446 |
+| Camera            | Videojournalist                                          |         435 |
+| Camera            | Jimmy Jib Operator                                       |         417 |
+| Camera            | Helicopter Camera                                        |         368 |
+| Camera            | Second Assistant "C" Camera                              |         350 |
+| Camera            | Underwater Director of Photography                       |         348 |
+| Camera            | Epk Camera Operator                                      |         340 |
+| Camera            | Video Report                                             |         311 |
+| Camera            | Libra Head Technician                                    |         244 |
+| Camera            | Additional Still Photographer                            |         205 |
+| Camera            | First Company Grip                                       |         191 |
+| Camera            | Second Company Grip                                      |         189 |
+| Camera            | Epk Producer                                             |         179 |
+| Camera            | Aerial Camera Technician                                 |         124 |
+| Camera            | Head of Layout                                           |          85 |
+| Camera            | Russian Arm Operator                                     |          85 |
+| Camera            | Additional Key Grip                                      |          70 |
+| Camera            | Epk Director                                             |          66 |
+| Camera            | Phantom Operator                                         |          55 |
+| Camera            | Camera Truck                                             |          54 |
+| Camera            | First Assistant "D" Camera                               |          53 |
+| Camera            | "D" Camera Operator                                      |          49 |
+| Camera            | Third Assistant "A" Camera                               |          40 |
+| Camera            | Second Assistant "D" Camera                              |          38 |
+| Camera            | Ultimate Arm Operator                                    |          34 |
+| Camera            | Additional Set Photographer                              |          27 |
+| Camera            | Red Technician                                           |          23 |
+| Camera            | Third Assistant "B" Camera                               |          18 |
+| Camera            | Underwater Stills Photographer                           |           6 |
+| Camera            | Third Assistant "C" Camera                               |           5 |
+| Camera            | Underwater Epk Photographer                              |           3 |
+| Camera            | Additional Underwater Photography                        |           3 |
+| Camera            | Third Assistant "D" Camera                               |           2 |
+| Camera            | Aerial Camera (suggest in addition to Helicopter Camera) |           1 |
+| Costume & Make-Up | Costume Design                                           |      101976 |
+| Costume & Make-Up | Makeup Artist                                            |       97521 |
+| Costume & Make-Up | Makeup & Hair                                            |       35880 |
+| Costume & Make-Up | Costume Designer                                         |       28639 |
+| Costume & Make-Up | Hairstylist                                              |       27937 |
+| Costume & Make-Up | Costumer                                                 |       20980 |
+| Costume & Make-Up | Key Makeup Artist                                        |       12683 |
+| Costume & Make-Up | Makeup Department Head                                   |       12201 |
+| Costume & Make-Up | Special Effects Makeup Artist                            |       11339 |
+| Costume & Make-Up | Makeup Designer                                          |        9912 |
+| Costume & Make-Up | Assistant Costume Designer                               |        9392 |
+| Costume & Make-Up | Assistant Makeup Artist                                  |        8997 |
+| Costume & Make-Up | Key Hair Stylist                                         |        8668 |
+| Costume & Make-Up | Costume Supervisor                                       |        8662 |
+| Costume & Make-Up | Costume Assistant                                        |        6851 |
+| Costume & Make-Up | Hair Department Head                                     |        6323 |
+| Costume & Make-Up | Set Costumer                                             |        5527 |
+| Costume & Make-Up | Wardrobe Supervisor                                      |        4344 |
+| Costume & Make-Up | Hair Designer                                            |        4268 |
+| Costume & Make-Up | Wardrobe Assistant                                       |        3760 |
+| Costume & Make-Up | Wardrobe Designer                                        |        3130 |
+| Costume & Make-Up | Wardrobe Master                                          |        3012 |
+| Costume & Make-Up | Makeup & Hair Assistant                                  |        2947 |
+| Costume & Make-Up | Makeup Supervisor                                        |        2842 |
+| Costume & Make-Up | Hairdresser                                              |        2583 |
+| Costume & Make-Up | Key Costumer                                             |        2494 |
+| Costume & Make-Up | Seamstress                                               |        2311 |
+| Costume & Make-Up | Costume Coordinator                                      |        1978 |
+| Costume & Make-Up | Assistant Hairstylist                                    |        1964 |
+| Costume & Make-Up | Prosthetic Makeup Artist                                 |        1625 |
+| Costume & Make-Up | Wardrobe Coordinator                                     |        1576 |
+| Costume & Make-Up | Dresser                                                  |        1532 |
+| Costume & Make-Up | Makeup Effects Designer                                  |        1521 |
+| Costume & Make-Up | On Set Dresser                                           |        1349 |
+| Costume & Make-Up | Hair Supervisor                                          |        1060 |
+| Costume & Make-Up | Prosthetics                                              |        1018 |
+| Costume & Make-Up | Special Effects Key Makeup Artist                        |         927 |
+| Costume & Make-Up | Wigmaker                                                 |         919 |
+| Costume & Make-Up | Tailor                                                   |         871 |
+| Costume & Make-Up | Prosthetic Designer                                      |         765 |
+| Costume & Make-Up | Additional Hairstylist                                   |         749 |
+| Costume & Make-Up | Costume Set Supervisor                                   |         590 |
+| Costume & Make-Up | Hair Assistant                                           |         500 |
+| Costume & Make-Up | Costume Standby                                          |         464 |
+| Costume & Make-Up | Costume Consultant                                       |         454 |
+| Costume & Make-Up | Other                                                    |         446 |
+| Costume & Make-Up | Ager/Dyer                                                |         434 |
+| Costume & Make-Up | Set Dressing Artist                                      |         427 |
+| Costume & Make-Up | Key Set Costumer                                         |         340 |
+| Costume & Make-Up | Truck Costumer                                           |         323 |
+| Costume & Make-Up | Wig Designer                                             |         314 |
+| Costume & Make-Up | Makeup Trainee                                           |         308 |
+| Costume & Make-Up | Prosthetic Supervisor                                    |         264 |
+| Costume & Make-Up | First Assistant Makeup Artist                            |         262 |
+| Costume & Make-Up | Lead Costumer                                            |         260 |
+| Costume & Make-Up | Costume Illustrator                                      |         239 |
+| Costume & Make-Up | Truck Supervisor                                         |         221 |
+| Costume & Make-Up | Hair Setup                                               |         220 |
+| Costume & Make-Up | Extras Makeup Artist                                     |         210 |
+| Costume & Make-Up | First Assistant Hairstylist                              |         194 |
+| Costume & Make-Up | Key Hairdresser                                          |         172 |
+| Costume & Make-Up | Assistant Hairdresser                                    |         166 |
+| Costume & Make-Up | Tattoo Designer                                          |         164 |
+| Costume & Make-Up | Contact Lens Technician                                  |         159 |
+| Costume & Make-Up | Extras Dresser                                           |         150 |
+| Costume & Make-Up | Prosthetics Sculptor                                     |         132 |
+| Costume & Make-Up | Wardrobe Intern                                          |         131 |
+| Costume & Make-Up | Co-Costume Designer                                      |         126 |
+| Costume & Make-Up | Daily Makeup & Hair                                      |         125 |
+| Costume & Make-Up | Additional Wardrobe Assistant                            |         110 |
+| Costume & Make-Up | Principal Costumer                                       |          90 |
+| Costume & Make-Up | Costume Mistress                                         |          87 |
+| Costume & Make-Up | Set Dressing Production Assistant                        |          66 |
+| Costume & Make-Up | Key Dresser                                              |          61 |
+| Costume & Make-Up | Contact Lens Designer                                    |          32 |
+| Costume & Make-Up | Set Dressing Supervisor                                  |          30 |
+| Costume & Make-Up | Daily Wardrobe                                           |          27 |
+| Costume & Make-Up | Contact Lens Painter                                     |          26 |
+| Costume & Make-Up | Set Dressing Manager                                     |          25 |
+| Costume & Make-Up | Wardrobe Specialized Technician                          |          25 |
+| Costume & Make-Up | Shoe Design                                              |          21 |
+| Costume & Make-Up | Facial Setup Artist                                      |          18 |
+| Costume & Make-Up | Prosthetics Painter                                      |          12 |
+| Creator           | Creator                                                  |       70909 |
+| Crew              | Cinematography                                           |      139426 |
+| Crew              | Stunts                                                   |      113855 |
+| Crew              | Thanks                                                   |       44578 |
+| Crew              | Stunt Coordinator                                        |       33420 |
+| Crew              | Special Effects                                          |       22931 |
+| Crew              | Stunt Double                                             |       21932 |
+| Crew              | Script                                                   |       19071 |
+| Crew              | Choreographer                                            |       16479 |
+| Crew              | Post Production Supervisor                               |       13170 |
+| Crew              | Compositor                                               |       11553 |
+| Crew              | Driver                                                   |        9590 |
+| Crew              | Creator                                                  |        9074 |
+| Crew              | Dramaturgy                                               |        8079 |
+| Crew              | Presenter                                                |        6252 |
+| Crew              | Special Effects Technician                               |        5947 |
+| Crew              | Special Effects Coordinator                              |        5866 |
+| Crew              | Stunt Driver                                             |        5652 |
+| Crew              | Catering                                                 |        5241 |
+| Crew              | Translator                                               |        4965 |
+| Crew              | Carpenter                                                |        4513 |
+| Crew              | Transportation Coordinator                               |        4456 |
+| Crew              | Public Relations                                         |        4250 |
+| Crew              | Fight Choreographer                                      |        4229 |
+| Crew              | Scenic Artist                                            |        4096 |
+| Crew              | Editorial Staff                                          |        4061 |
+| Crew              | Utility Stunts                                           |        4041 |
+| Crew              | Other                                                    |        3891 |
+| Crew              | Additional Music                                         |        3841 |
+| Crew              | Set Production Assistant                                 |        3629 |
+| Crew              | Visual Effects Editor                                    |        3578 |
+| Crew              | Transportation Captain                                   |        3513 |
+| Crew              | Video Assist Operator                                    |        3399 |
+| Crew              | Craft Service                                            |        3371 |
+| Crew              | Makeup Effects                                           |        3313 |
+| Crew              | Technical Supervisor                                     |        3060 |
+| Crew              | Mixing Engineer                                          |        3059 |
+| Crew              | Stand In                                                 |        3032 |
+| Crew              | Additional Writing                                       |        2964 |
+| Crew              | Technical Advisor                                        |        2857 |
+| Crew              | CG Supervisor                                            |        2808 |
+| Crew              | Production Controller                                    |        2784 |
+| Crew              | Post-Production Manager                                  |        2717 |
+| Crew              | Post Production Assistant                                |        2672 |
+| Crew              | Commissioning Editor                                     |        2624 |
+| Crew              | Unit Publicist                                           |        2604 |
+| Crew              | Martial Arts Choreographer                               |        2490 |
+| Crew              | Legal Services                                           |        2316 |
+| Crew              | Creative Consultant                                      |        2289 |
+| Crew              | Drone Operator                                           |        2249 |
+| Crew              | Special Effects Assistant                                |        2075 |
+| Crew              | Sound Recordist                                          |        2060 |
+| Crew              | Armorer                                                  |        1957 |
+| Crew              | In Memory Of                                             |        1807 |
+| Crew              | Animal Wrangler                                          |        1750 |
+| Crew              | Production Office Assistant                              |        1659 |
+| Crew              | Pyrotechnician                                           |        1638 |
+| Crew              | Lighting Camera                                          |        1605 |
+| Crew              | Actor's Assistant                                        |        1574 |
+| Crew              | Prop Maker                                               |        1544 |
+| Crew              | Score Engineer                                           |        1474 |
+| Crew              | Propmaker                                                |        1467 |
+| Crew              | Dialect Coach                                            |        1456 |
+| Crew              | Set Medic                                                |        1336 |
+| Crew              | Additional Dialogue                                      |        1318 |
+| Crew              | Generator Operator                                       |        1284 |
+| Crew              | Mix Technician                                           |        1259 |
+| Crew              | Dialogue Coach                                           |        1209 |
+| Crew              | Production Intern                                        |        1178 |
+| Crew              | Manager of Operations                                    |        1115 |
+| Crew              | Title Graphics                                           |        1073 |
+| Crew              | Visual Effects Art Director                              |        1034 |
+| Crew              | Compositors                                              |         979 |
+| Crew              | Systems Administrators & Support                         |         963 |
+| Crew              | Digital Effects Supervisor                               |         947 |
+| Crew              | Pilot                                                    |         937 |
+| Crew              | Machinist                                                |         931 |
+| Crew              | Set Runner                                               |         905 |
+| Crew              | Intern                                                   |         885 |
+| Crew              | Documentation & Support                                  |         882 |
+| Crew              | Supervising Animator                                     |         866 |
+| Crew              | Loader                                                   |         862 |
+| Crew              | Acting Double                                            |         859 |
+| Crew              | Floor Runner                                             |         844 |
+| Crew              | Sound Design Assistant                                   |         825 |
+| Crew              | Security                                                 |         823 |
+| Crew              | Health and Safety                                        |         821 |
+| Crew              | Poem                                                     |         818 |
+| Crew              | Transportation Co-Captain                                |         798 |
+| Crew              | Production Artist                                        |         786 |
+| Crew              | Studio Teacher                                           |         782 |
+| Crew              | Military Consultant                                      |         779 |
+| Crew              | Second Unit                                              |         760 |
+| Crew              | Second Unit Cinematographer                              |         750 |
+| Crew              | Property Master                                          |         734 |
+| Crew              | Software Engineer                                        |         708 |
+| Crew              | Picture Car Coordinator                                  |         691 |
+| Crew              | Animal Coordinator                                       |         666 |
+| Crew              | Scientific Consultant                                    |         633 |
+| Crew              | Transcriptions                                           |         624 |
+| Crew              | Chef                                                     |         576 |
+| Crew              | Executive Music Producer                                 |         569 |
+| Crew              | Medical Consultant                                       |         561 |
+| Crew              | Assistant Script                                         |         492 |
+| Crew              | Film Processor                                           |         492 |
+| Crew              | Cableman                                                 |         491 |
+| Crew              | Sequence Supervisor                                      |         471 |
+| Crew              | Executive Visual Effects Producer                        |         464 |
+| Crew              | Director of Communications                               |         457 |
+| Crew              | Motion Capture Artist                                    |         450 |
+| Crew              | Projection                                               |         448 |
+| Crew              | Weapons Master                                           |         411 |
+| Crew              | Photoscience Manager                                     |         409 |
+| Crew              | Aerial Coordinator                                       |         381 |
+| Crew              | Digital Producer                                         |         378 |
+| Crew              | Logistics Coordinator                                    |         374 |
+| Crew              | Cast Driver                                              |         357 |
+| Crew              | Steadycam                                                |         357 |
+| Crew              | Supervisor of Production Resources                       |         329 |
+| Crew              | Clearances Coordinator                                   |         315 |
+| Crew              | Sets & Props Artist                                      |         312 |
+| Crew              | Catering Head Chef                                       |         310 |
+| Crew              | Techno Crane Operator                                    |         306 |
+| Crew              | Post Production Consulting                               |         298 |
+| Crew              | Supervising Technical Director                           |         294 |
+| Crew              | Special Sound Effects                                    |         286 |
+| Crew              | Marine Coordinator                                       |         282 |
+| Crew              | Digital Effects Producer                                 |         277 |
+| Crew              | Security Coordinator                                     |         266 |
+| Crew              | CGI Supervisor                                           |         263 |
+| Crew              | Administrative Assistant                                 |         242 |
+| Crew              | Chaperone                                                |         234 |
+| Crew              | Series Writer                                            |         233 |
+| Crew              | Graphic Novel Illustrator                                |         229 |
+| Crew              | Additional Script Supervisor                             |         224 |
+| Crew              | Child Wrangler                                           |         220 |
+| Crew              | Master at Arms                                           |         216 |
+| Crew              | Animatronics Designer                                    |         215 |
+| Crew              | Police Consultant                                        |         210 |
+| Crew              | Stunts Coordinator                                       |         199 |
+| Crew              | Telecine Colorist                                        |         199 |
+| Crew              | Playback Coordinator                                     |         198 |
+| Crew              | Assistant Chef                                           |         196 |
+| Crew              | Associate Choreographer                                  |         195 |
+| Crew              | Charge Scenic Artist                                     |         181 |
+| Crew              | Motion Actor                                             |         180 |
+| Crew              | Animatronic and Prosthetic Effects                       |         178 |
+| Crew              | Quality Control Supervisor                               |         177 |
+| Crew              | Studio Teachers                                          |         173 |
+| Crew              | Schedule Coordinator                                     |         167 |
+| Crew              | Vehicles Coordinator                                     |         158 |
+| Crew              | Special Effects Manager                                  |         155 |
+| Crew              | Digital Supervisor                                       |         153 |
+| Crew              | Specialized Driver                                       |         150 |
+| Crew              | Key Scenic Artist                                        |         142 |
+| Crew              | Assistant Craft Service                                  |         138 |
+| Crew              | Treatment                                                |         127 |
+| Crew              | Radio Play                                               |         126 |
+| Crew              | Visual Effects Design Consultant                         |         115 |
+| Crew              | Video Game                                               |         113 |
+| Crew              | Information Systems Manager                              |         107 |
+| Crew              | Unit Medic                                               |         105 |
+| Crew              | Clearances Consultant                                    |         105 |
+| Crew              | Set Production Intern                                    |         104 |
+| Crew              | Key Special Effects                                      |          84 |
+| Crew              | File Footage                                             |          81 |
+| Crew              | Weapons Wrangler                                         |          71 |
+| Crew              | Software Team Lead                                       |          71 |
+| Crew              | Second Film Editor                                       |          70 |
+| Crew              | Vehicles Wrangler                                        |          68 |
+| Crew              | Armory Coordinator                                       |          68 |
+| Crew              | Executive in Charge of Finance                           |          67 |
+| Crew              | Supervising Armorer                                      |          66 |
+| Crew              | Base Camp Operator                                       |          62 |
+| Crew              | Tattooist                                                |          60 |
+| Crew              | Sequence Lead                                            |          60 |
+| Crew              | Receptionist                                             |          57 |
+| Crew              | Sets & Props Supervisor                                  |          54 |
+| Crew              | Temp Music Editor                                        |          53 |
+| Crew              | Sequence Leads                                           |          52 |
+| Crew              | Animatronics Supervisor                                  |          51 |
+| Crew              | Special Effects Best Boy                                 |          46 |
+| Crew              | Sponsorship Coordinator                                  |          42 |
+| Crew              | Post Production Scripts                                  |          38 |
+| Crew              | Head Driver                                              |          34 |
+| Crew              | Department Administrator                                 |          33 |
+| Crew              | Assistant Picture Car Coordinator                        |          30 |
+| Crew              | Sequence Artist                                          |          30 |
+| Crew              | Interactive Manager                                      |          22 |
+| Crew              | Unit Production Manager                                  |          18 |
+| Crew              | Sponsorship Director                                     |          18 |
+| Crew              | Temp Sound Editor                                        |          14 |
+| Crew              | Series Publicist                                         |          13 |
+| Crew              | Captain Driver                                           |          11 |
+| Crew              | Assistant Vehicles Coordinator                           |          11 |
+| Crew              | Marine Pilot                                             |           9 |
+| Crew              | Chaperone Tutor                                          |           7 |
+| Crew              | Art Direction                                            |           6 |
+| Crew              | Supervising Art Director                                 |           4 |
+| Crew              | Dramaturgie                                              |           1 |
+| Directing         | Director                                                 |     1552895 |
+| Directing         | Assistant Director                                       |      114240 |
+| Directing         | First Assistant Director                                 |       55182 |
+| Directing         | Script Supervisor                                        |       45233 |
+| Directing         | Second Assistant Director                                |       37557 |
+| Directing         | Continuity                                               |        9533 |
+| Directing         | Third Assistant Director                                 |        9463 |
+| Directing         | Co-Director                                              |        9204 |
+| Directing         | Second Unit Director                                     |        8863 |
+| Directing         | Series Director                                          |        7205 |
+| Directing         | Second Second Assistant Director                         |        4984 |
+| Directing         | Stage Director                                           |        3809 |
+| Directing         | Action Director                                          |        3328 |
+| Directing         | Layout                                                   |        2699 |
+| Directing         | Script Coordinator                                       |        1779 |
+| Directing         | Assistant Director Trainee                               |        1640 |
+| Directing         | Second Unit First Assistant Director                     |        1195 |
+| Directing         | Additional Second Assistant Director                     |         930 |
+| Directing         | Other                                                    |         803 |
+| Directing         | Crowd Assistant Director                                 |         430 |
+| Directing         | Additional Third Assistant Director                      |         288 |
+| Directing         | Field Director                                           |         215 |
+| Directing         | First Assistant Director (Prep)                          |         121 |
+| Directing         | Special Guest Director                                   |          73 |
+| Directing         | Second Assistant Director Trainee                        |          52 |
+| Directing         | First Assistant Director Trainee                         |          35 |
+| Directing         | Insert Unit Director                                     |          13 |
+| Directing         | Insert Unit First Assistant Director                     |           4 |
+| Editing           | Editor                                                   |      541608 |
+| Editing           | Assistant Editor                                         |       39419 |
+| Editing           | Colorist                                                 |       35446 |
+| Editing           | Color Grading                                            |       11567 |
+| Editing           | Online Editor                                            |        7706 |
+| Editing           | First Assistant Editor                                   |        5256 |
+| Editing           | Negative Cutter                                          |        2945 |
+| Editing           | Digital Intermediate                                     |        2824 |
+| Editing           | Color Timer                                              |        2717 |
+| Editing           | Additional Editor                                        |        2393 |
+| Editing           | Additional Editing                                       |        2221 |
+| Editing           | Supervising Editor                                       |        1834 |
+| Editing           | Associate Editor                                         |        1621 |
+| Editing           | Editorial Consultant                                     |        1539 |
+| Editing           | Editorial Manager                                        |        1401 |
+| Editing           | Digital Intermediate Producer                            |        1387 |
+| Editing           | Digital Intermediate Colorist                            |        1207 |
+| Editing           | Co-Editor                                                |        1188 |
+| Editing           | Editorial Production Assistant                           |        1105 |
+| Editing           | Project Manager                                          |        1089 |
+| Editing           | Lead Editor                                              |        1024 |
+| Editing           | Color Assistant                                          |        1009 |
+| Editing           | Archival Footage Research                                |         926 |
+| Editing           | Digital Colorist                                         |         902 |
+| Editing           | Other                                                    |         866 |
+| Editing           | Consulting Editor                                        |         725 |
+| Editing           | Digital Intermediate Editor                              |         715 |
+| Editing           | Dialogue Editor                                          |         709 |
+| Editing           | Editorial Services                                       |         699 |
+| Editing           | Editorial Coordinator                                    |         689 |
+| Editing           | Archival Footage Coordinator                             |         568 |
+| Editing           | Digital Intermediate Assistant                           |         306 |
+| Editing           | Supervising Film Editor                                  |         278 |
+| Editing           | Dailies Operator                                         |         275 |
+| Editing           | Senior Colorist                                          |         246 |
+| Editing           | Digital Conform Editor                                   |         173 |
+| Editing           | Dailies Manager                                          |         160 |
+| Editing           | Dailies Technician                                       |         154 |
+| Editing           | Additional Colorist                                      |         140 |
+| Editing           | Digital Color Timer                                      |         139 |
+| Editing           | Assistant Picture Editor                                 |          77 |
+| Editing           | Additional Editorial Assistant                           |          76 |
+| Editing           | Stereoscopic Editor                                      |          73 |
+| Editing           | EPK Editor                                               |          73 |
+| Editing           | Digital Intermediate Data Wrangler                       |          72 |
+| Editing           | 3D Editor                                                |          46 |
+| Editing           | First Assistant Picture Editor                           |          20 |
+| Editing           | Senior Digital Intermediate Colorist                     |          17 |
+| Editing           | Atmos Editor                                             |          16 |
+| Editing           | 3D Digital Colorist                                      |          13 |
+| Lighting          | Gaffer                                                   |       61453 |
+| Lighting          | Electrician                                              |       27066 |
+| Lighting          | Lighting Technician                                      |       19166 |
+| Lighting          | Lighting Director                                        |        9173 |
+| Lighting          | Best Boy Electric                                        |        7486 |
+| Lighting          | Lighting Artist                                          |        4927 |
+| Lighting          | Lighting Design                                          |        3875 |
+| Lighting          | Rigging Grip                                             |        3027 |
+| Lighting          | Chief Lighting Technician                                |        2721 |
+| Lighting          | Rigging Gaffer                                           |        2376 |
+| Lighting          | Assistant Gaffer                                         |        1493 |
+| Lighting          | Lighting Production Assistant                            |        1460 |
+| Lighting          | Lighting Coordinator                                     |        1334 |
+| Lighting          | Best Boy Lighting Technician                             |        1049 |
+| Lighting          | Lighting Supervisor                                      |         951 |
+| Lighting          | Assistant Chief Lighting Technician                      |         924 |
+| Lighting          | Lighting Manager                                         |         830 |
+| Lighting          | Best Boy Electrician                                     |         818 |
+| Lighting          | Key Rigging Grip                                         |         806 |
+| Lighting          | Master Lighting Artist                                   |         745 |
+| Lighting          | Assistant Electrician                                    |         408 |
+| Lighting          | Additional Lighting Technician                           |         362 |
+| Lighting          | Lighting Programmer                                      |         344 |
+| Lighting          | Rigging Supervisor                                       |         328 |
+| Lighting          | Genetator Operator                                       |         308 |
+| Lighting          | Additional Gaffer                                        |         217 |
+| Lighting          | Directing Lighting Artist                                |         153 |
+| Lighting          | Standby Rigger                                           |         135 |
+| Lighting          | Other                                                    |         133 |
+| Lighting          | Daily Electrics                                          |          69 |
+| Lighting          | Underwater Gaffer                                        |          36 |
+| Lighting          | O.B. Lighting                                            |           1 |
+| Production        | Producer                                                 |      794116 |
+| Production        | Executive Producer                                       |      382564 |
+| Production        | Casting                                                  |       77002 |
+| Production        | Production Manager                                       |       75284 |
+| Production        | Production Assistant                                     |       71910 |
+| Production        | Associate Producer                                       |       71828 |
+| Production        | Co-Producer                                              |       65053 |
+| Production        | Line Producer                                            |       35179 |
+| Production        | Production Coordinator                                   |       24123 |
+| Production        | Location Manager                                         |       20038 |
+| Production        | Co-Executive Producer                                    |       18924 |
+| Production        | Unit Production Manager                                  |       16171 |
+| Production        | Casting Director                                         |       16016 |
+| Production        | Unit Manager                                             |       11730 |
+| Production        | Production Designer                                      |       11625 |
+| Production        | Production Supervisor                                    |       11492 |
+| Production        | Production Director                                      |       11267 |
+| Production        | Supervising Producer                                     |       10622 |
+| Production        | Producer's Assistant                                     |        9387 |
+| Production        | Assistant Production Manager                             |        8234 |
+| Production        | Researcher                                               |        7836 |
+| Production        | Production Accountant                                    |        7802 |
+| Production        | Production Secretary                                     |        6901 |
+| Production        | Casting Assistant                                        |        6888 |
+| Production        | Casting Associate                                        |        6541 |
+| Production        | Production Executive                                     |        5967 |
+| Production        | Publicist                                                |        5890 |
+| Production        | Consulting Producer                                      |        5546 |
+| Production        | Post Production Coordinator                              |        5480 |
+| Production        | Extras Casting                                           |        4984 |
+| Production        | Assistant Location Manager                               |        4972 |
+| Production        | Administration                                           |        4769 |
+| Production        | Assistant Production Coordinator                         |        4264 |
+| Production        | Other                                                    |        4224 |
+| Production        | Executive In Charge Of Production                        |        3862 |
+| Production        | Post Producer                                            |        3734 |
+| Production        | Location Assistant                                       |        3104 |
+| Production        | Accountant                                               |        2260 |
+| Production        | Head of Production                                       |        2255 |
+| Production        | Delegated Producer                                       |        2082 |
+| Production        | Coordinating Producer                                    |        2060 |
+| Production        | Development Producer                                     |        2052 |
+| Production        | Assistant Accountant                                     |        1862 |
+| Production        | Post Production Producer                                 |        1809 |
+| Production        | Production Runner                                        |        1796 |
+| Production        | Production Consultant                                    |        1593 |
+| Production        | ADR Voice Casting                                        |        1545 |
+| Production        | Casting Coordinator                                      |        1515 |
+| Production        | Payroll Accountant                                       |        1505 |
+| Production        | Finance                                                  |        1448 |
+| Production        | Assistant Unit Manager                                   |        1334 |
+| Production        | Art Department Production Assistant                      |        1300 |
+| Production        | First Assistant Accountant                               |        1282 |
+| Production        | Location Coordinator                                     |        1256 |
+| Production        | General Manager                                          |        1197 |
+| Production        | Executive Producer's Assistant                           |        1186 |
+| Production        | Executive Co-Producer                                    |        1111 |
+| Production        | Casting Producer                                         |        1069 |
+| Production        | Data Management Technician                               |        1045 |
+| Production        | Key Production Assistant                                 |        1045 |
+| Production        | Extras Casting Assistant                                 |        1027 |
+| Production        | Local Casting                                            |         964 |
+| Production        | Director of Operations                                   |         933 |
+| Production        | Location Casting                                         |         911 |
+| Production        | Additional Production Assistant                          |         904 |
+| Production        | Development Manager                                      |         871 |
+| Production        | Production Driver                                        |         769 |
+| Production        | Location Production Assistant                            |         756 |
+| Production        | Second Assistant Accountant                              |         728 |
+| Production        | Additional Casting                                       |         717 |
+| Production        | Post Production Accountant                               |         634 |
+| Production        | Production Trainee                                       |         632 |
+| Production        | Production Office Coordinator                            |         589 |
+| Production        | Extras Casting Coordinator                               |         571 |
+| Production        | Key Set Production Assistant                             |         569 |
+| Production        | Travel Coordinator                                       |         555 |
+| Production        | Executive Assistant                                      |         537 |
+| Production        | Grip Production Assistant                                |         514 |
+| Production        | Research Assistant                                       |         453 |
+| Production        | Background Casting Director                              |         392 |
+| Production        | Finishing Producer                                       |         386 |
+| Production        | Original Casting                                         |         383 |
+| Production        | Business Affairs Coordinator                             |         376 |
+| Production        | Executive In Charge Of Post Production                   |         360 |
+| Production        | Casting Consultant                                       |         350 |
+| Production        | Post Coordinator                                         |         304 |
+| Production        | Controller                                               |         282 |
+| Production        | Executive Consultant                                     |         279 |
+| Production        | Post Production Technical Engineer                       |         217 |
+| Production        | Musical Casting                                          |         201 |
+| Production        | Trainee Production Coordinator                           |         195 |
+| Production        | Script Researcher                                        |         178 |
+| Production        | Attorney                                                 |         126 |
+| Production        | Second Assistant Production Coordinator                  |         122 |
+| Production        | First Assistant Production Coordinator                   |         121 |
+| Production        | Accounting Clerk Assistant                               |         118 |
+| Production        | Accounting Supervisor                                    |         115 |
+| Production        | Broadcast Producer                                       |          98 |
+| Production        | Human Resources                                          |          98 |
+| Production        | Character Technical Supervisor                           |          82 |
+| Production        | Casting Researcher                                       |          73 |
+| Production        | Head of Programming                                      |          61 |
+| Production        | Key Grip Production Assistant                            |          57 |
+| Production        | Truck Production Assistant                               |          54 |
+| Production        | Accounting Trainee                                       |          52 |
+| Production        | Consulting Accountant                                    |          50 |
+| Production        | Assistant Extras Casting                                 |          46 |
+| Production        | Locale Casting Director                                  |          45 |
+| Production        | Key Art Production Assistant                             |          44 |
+| Production        | Second Unit Location Manager                             |          37 |
+| Production        | Head of Research                                         |          36 |
+| Production        | Key Accountant                                           |          36 |
+| Production        | Contract Manager                                         |          33 |
+| Production        | Senior Executive Consultant                              |          32 |
+| Production        | Additional Post-Production Supervisor                    |          25 |
+| Production        | Unit Swing                                               |          24 |
+| Production        | Back-up Set Production Assistant                         |          12 |
+| Production        | Feature Finishing Producer                               |          10 |
+| Production        | Second Assistant Unit Manager                            |           8 |
+| Production        | Back-up Truck Production Assistant                       |           5 |
+| Production        | Street Casting                                           |           3 |
+| Production        | Insert Unit Location Manager                             |           1 |
+| Sound             | Music                                                    |      213327 |
+| Sound             | Original Music Composer                                  |      196180 |
+| Sound             | Sound                                                    |      137993 |
+| Sound             | Sound Designer                                           |       71995 |
+| Sound             | Sound Mixer                                              |       56530 |
+| Sound             | Sound Recordist                                          |       52118 |
+| Sound             | Sound Editor                                             |       39499 |
+| Sound             | Boom Operator                                            |       37989 |
+| Sound             | Sound Re-Recording Mixer                                 |       35640 |
+| Sound             | Sound Director                                           |       26236 |
+| Sound             | Playback Singer                                          |       21932 |
+| Sound             | Foley Artist                                             |       21054 |
+| Sound             | Theme Song Performance                                   |       20429 |
+| Sound             | Sound Effects Editor                                     |       20084 |
+| Sound             | Musician                                                 |       17565 |
+| Sound             | Songs                                                    |       16297 |
+| Sound             | Dialogue Editor                                          |       16016 |
+| Sound             | Supervising Sound Editor                                 |       15182 |
+| Sound             | Music Supervisor                                         |       13947 |
+| Sound             | Music Director                                           |       13314 |
+| Sound             | Sound Engineer                                           |       12113 |
+| Sound             | Conductor                                                |       11912 |
+| Sound             | Music Editor                                             |       11788 |
+| Sound             | Sound Assistant                                          |       11260 |
+| Sound             | Sound Effects                                            |       10584 |
+| Sound             | Production Sound Mixer                                   |       10289 |
+| Sound             | Music Producer                                           |        8458 |
+| Sound             | Foley Editor                                             |        7088 |
+| Sound             | ADR Mixer                                                |        6412 |
+| Sound             | Sound Supervisor                                         |        6090 |
+| Sound             | Orchestrator                                             |        5938 |
+| Sound             | Foley Mixer                                              |        5584 |
+| Sound             | Assistant Sound Editor                                   |        5545 |
+| Sound             | Foley                                                    |        5365 |
+| Sound             | Music Arranger                                           |        5315 |
+| Sound             | ADR Editor                                               |        4436 |
+| Sound             | Vocals                                                   |        4360 |
+| Sound             | ADR Recordist                                            |        4217 |
+| Sound             | Foley Recordist                                          |        3353 |
+| Sound             | Recording Supervision                                    |        2952 |
+| Sound             | Music Score Producer                                     |        2886 |
+| Sound             | Music Coordinator                                        |        2234 |
+| Sound             | Music Consultant                                         |        2167 |
+| Sound             | ADR Supervisor                                           |        2027 |
+| Sound             | Scoring Mixer                                            |        1772 |
+| Sound             | ADR & Dubbing                                            |        1622 |
+| Sound             | Sound Mix Technician                                     |        1588 |
+| Sound             | Other                                                    |        1508 |
+| Sound             | Location Sound Recordist                                 |        1415 |
+| Sound             | Main Title Theme Composer                                |        1291 |
+| Sound             | Utility Sound                                            |        1134 |
+| Sound             | Foley Supervisor                                         |        1130 |
+| Sound             | Sound Post Production Coordinator                        |        1089 |
+| Sound             | Audio Post Coordinator                                   |        1027 |
+| Sound             | Dolby Consultant                                         |        1022 |
+| Sound             | Supervising ADR Editor                                   |         939 |
+| Sound             | First Assistant Sound Editor                             |         935 |
+| Sound             | Location Sound Mixer                                     |         892 |
+| Sound             | Sound Post Supervisor                                    |         860 |
+| Sound             | Supervising Dialogue Editor                              |         856 |
+| Sound             | Assistant Sound Engineer                                 |         706 |
+| Sound             | Sound Effects Designer                                   |         687 |
+| Sound             | Sound Re-Recording Assistant                             |         662 |
+| Sound             | Supervising Music Editor                                 |         632 |
+| Sound             | Sound Technical Supervisor                               |         580 |
+| Sound             | Additional Soundtrack                                    |         564 |
+| Sound             | Additional Sound Re-Recording Mixer                      |         534 |
+| Sound             | Assistant Sound Designer                                 |         520 |
+| Sound             | ADR Engineer                                             |         512 |
+| Sound             | Vocal Coach                                              |         416 |
+| Sound             | Music Programmer                                         |         402 |
+| Sound             | Foley Recording Engineer                                 |         376 |
+| Sound             | Music Sound Design and Processing                        |         342 |
+| Sound             | Additional Sound Re-Recordist                            |         321 |
+| Sound             | Assistant Dialogue Editor                                |         313 |
+| Sound             | Assistant Music Supervisor                               |         312 |
+| Sound             | Apprentice Sound Editor                                  |         311 |
+| Sound             | Supervising Sound Effects Editor                         |         300 |
+| Sound             | Assistant Foley Artist                                   |         280 |
+| Sound             | ADR Coordinator                                          |         263 |
+| Sound             | Second Assistant Sound                                   |         249 |
+| Sound             | ADR Recording Engineer                                   |         145 |
+| Sound             | Music Supervision Assistant                              |         141 |
+| Sound             | Music Co-Supervisor                                      |         137 |
+| Sound             | Loop Group Coordinator                                   |         101 |
+| Sound             | Sound Montage Associate                                  |          79 |
+| Sound             | Additional Production Sound Mixer                        |          77 |
+| Sound             | Additional Music Supervisor                              |          68 |
+| Sound             | Location Sound Assistant                                 |          52 |
+| Sound             | ADR Post Producer                                        |          32 |
+| Sound             | Keyboard Programmer                                      |          22 |
+| Sound             | Digital Foley Artist                                     |          12 |
+| Sound             | Joint ADR Mixer                                          |           2 |
+| Sound             | O.B. Sound                                               |           1 |
+| Visual Effects    | Key Animation                                            |      226446 |
+| Visual Effects    | Animation                                                |       82977 |
+| Visual Effects    | Animation Director                                       |       62628 |
+| Visual Effects    | Visual Effects                                           |       23124 |
+| Visual Effects    | Visual Effects Supervisor                                |       19140 |
+| Visual Effects    | Character Designer                                       |       16952 |
+| Visual Effects    | VFX Artist                                               |       13154 |
+| Visual Effects    | Compositing Artist                                       |       12371 |
+| Visual Effects    | Visual Effects Producer                                  |       11269 |
+| Visual Effects    | Digital Compositor                                       |        8744 |
+| Visual Effects    | Supervising Animation Director                           |        7683 |
+| Visual Effects    | Color Designer                                           |        7259 |
+| Visual Effects    | Visual Effects Coordinator                               |        6524 |
+| Visual Effects    | VFX Supervisor                                           |        6451 |
+| Visual Effects    | Special Effects Supervisor                               |        6411 |
+| Visual Effects    | Opening/Ending Animation                                 |        5778 |
+| Visual Effects    | Modeling                                                 |        3804 |
+| Visual Effects    | Animation Supervisor                                     |        3251 |
+| Visual Effects    | 3D Artist                                                |        2747 |
+| Visual Effects    | Lead Animator                                            |        2576 |
+| Visual Effects    | 3D Animator                                              |        2399 |
+| Visual Effects    | CG Artist                                                |        2189 |
+| Visual Effects    | CGI Director                                             |        1913 |
+| Visual Effects    | Compositing Supervisor                                   |        1905 |
+| Visual Effects    | Visual Development                                       |        1868 |
+| Visual Effects    | VFX Editor                                               |        1786 |
+| Visual Effects    | Mechanical Designer                                      |        1773 |
+| Visual Effects    | Matte Painter                                            |        1744 |
+| Visual Effects    | 2D Artist                                                |        1508 |
+| Visual Effects    | Visual Effects Compositor                                |        1496 |
+| Visual Effects    | Creature Design                                          |        1450 |
+| Visual Effects    | Rotoscoping Artist                                       |        1391 |
+| Visual Effects    | VFX Director of Photography                              |        1380 |
+| Visual Effects    | 3D Modeller                                              |        1170 |
+| Visual Effects    | Visual Effects Production Manager                        |        1116 |
+| Visual Effects    | Layout Supervisor                                        |        1108 |
+| Visual Effects    | Compositing Lead                                         |        1049 |
+| Visual Effects    | 3D Director                                              |        1037 |
+| Visual Effects    | Visual Effects Camera                                    |         987 |
+| Visual Effects    | Visual Effects Director                                  |         897 |
+| Visual Effects    | Effects Supervisor                                       |         893 |
+| Visual Effects    | CG Animator                                              |         849 |
+| Visual Effects    | Visual Effects Designer                                  |         845 |
+| Visual Effects    | Visual Effects Production Assistant                      |         828 |
+| Visual Effects    | Animation Production Assistant                           |         728 |
+| Visual Effects    | Digital Compositors                                      |         717 |
+| Visual Effects    | Visual Effects Technical Director                        |         697 |
+| Visual Effects    | Digital Effects Producer                                 |         602 |
+| Visual Effects    | Creature Technical Director                              |         594 |
+| Visual Effects    | Senior Animator                                          |         565 |
+| Visual Effects    | VFX Production Coordinator                               |         499 |
+| Visual Effects    | Photo Retouching                                         |         431 |
+| Visual Effects    | Pipeline Technical Director                              |         425 |
+| Visual Effects    | Matchmove Supervisor                                     |         384 |
+| Visual Effects    | Pyrotechnic Supervisor                                   |         378 |
+| Visual Effects    | Additional Visual Effects                                |         364 |
+| Visual Effects    | Visual Effects Assistant Editor                          |         330 |
+| Visual Effects    | VFX Lighting Artist                                      |         328 |
+| Visual Effects    | 3D Supervisor                                            |         326 |
+| Visual Effects    | Animation Coordinator                                    |         320 |
+| Visual Effects    | Animation Manager                                        |         310 |
+| Visual Effects    | Lead Character Designer                                  |         309 |
+| Visual Effects    | Modelling Supervisor                                     |         306 |
+| Visual Effects    | Shading                                                  |         280 |
+| Visual Effects    | Pre-Visualization Supervisor                             |         274 |
+| Visual Effects    | 2D Supervisor                                            |         249 |
+| Visual Effects    | 3D Generalist                                            |         232 |
+| Visual Effects    | Head of Animation                                        |         226 |
+| Visual Effects    | Simulation & Effects Artist                              |         224 |
+| Visual Effects    | Senior Visual Effects Supervisor                         |         212 |
+| Visual Effects    | Character Modelling Supervisor                           |         191 |
+| Visual Effects    | Stereoscopic Supervisor                                  |         176 |
+| Visual Effects    | Imaging Science                                          |         159 |
+| Visual Effects    | Fix Animator                                             |         152 |
+| Visual Effects    | Director of Previsualization                             |         148 |
+| Visual Effects    | Roto Supervisor                                          |         144 |
+| Visual Effects    | Animation Department Coordinator                         |         129 |
+| Visual Effects    | Animation Technical Director                             |         119 |
+| Visual Effects    | 24 Frame Playback                                        |         115 |
+| Visual Effects    | 3D Tracking Layout                                       |         109 |
+| Visual Effects    | Senior Modeller                                          |          97 |
+| Visual Effects    | Generalist                                               |          92 |
+| Visual Effects    | 3D Coordinator                                           |          89 |
+| Visual Effects    | Pre-Visualization Coordinator                            |          88 |
+| Visual Effects    | CG Painter                                               |          81 |
+| Visual Effects    | Creature Effects Technical Director                      |          80 |
+| Visual Effects    | I/O Supervisor                                           |          79 |
+| Visual Effects    | Animation Fix Coordinator                                |          76 |
+| Visual Effects    | Additional Effects Development                           |          73 |
+| Visual Effects    | Smoke Artist                                             |          73 |
+| Visual Effects    | Mechanical & Creature Designer                           |          72 |
+| Visual Effects    | CG Engineer                                              |          68 |
+| Visual Effects    | Cloth Setup                                              |          68 |
+| Visual Effects    | Digital Film Recording                                   |          65 |
+| Visual Effects    | Stereoscopic Coordinator                                 |          60 |
+| Visual Effects    | I/O Manager                                              |          45 |
+| Visual Effects    | 2D Sequence Supervisor                                   |          33 |
+| Visual Effects    | Chief Technician / Stop-Motion Expert                    |          30 |
+| Visual Effects    | Stereoscopic Technical Director                          |          23 |
+| Visual Effects    | Senior Generalist                                        |          21 |
+| Visual Effects    | 3D Sequence Supervisor                                   |          19 |
+| Visual Effects    | Battle Motion Coordinator                                |          13 |
+| Visual Effects    | Visual Effects Lineup                                    |          11 |
+| Visual Effects    | Simulation & Effects Production Assistant                |           7 |
+| Visual Effects    | Lead Creature Designer                                   |           7 |
+| Visual Effects    | Cyber Scanning Supervisor                                |           2 |
+| Writing           | Writer                                                   |      863451 |
+| Writing           | Screenplay                                               |      240706 |
+| Writing           | Story                                                    |       88401 |
+| Writing           | Novel                                                    |       37960 |
+| Writing           | Lyricist                                                 |       20643 |
+| Writing           | Original Story                                           |       16328 |
+| Writing           | Dialogue                                                 |       13820 |
+| Writing           | Teleplay                                                 |       13198 |
+| Writing           | Scenario Writer                                          |       11922 |
+| Writing           | Adaptation                                               |       10471 |
+| Writing           | Author                                                   |        9656 |
+| Writing           | Theatre Play                                             |        9356 |
+| Writing           | Characters                                               |        7550 |
+| Writing           | Idea                                                     |        7242 |
+| Writing           | Script Editor                                            |        7213 |
+| Writing           | Storyboard                                               |        6970 |
+| Writing           | Book                                                     |        6626 |
+| Writing           | Co-Writer                                                |        6487 |
+| Writing           | Creative Producer                                        |        6212 |
+| Writing           | Series Composition                                       |        5653 |
+| Writing           | Comic Book                                               |        5605 |
+| Writing           | Script Consultant                                        |        4690 |
+| Writing           | Story Editor                                             |        4031 |
+| Writing           | Writers' Assistant                                       |        3643 |
+| Writing           | Short Story                                              |        3545 |
+| Writing           | Screenstory                                              |        3165 |
+| Writing           | Original Concept                                         |        2333 |
+| Writing           | Original Film Writer                                     |        2201 |
+| Writing           | Staff Writer                                             |        2107 |
+| Writing           | Original Series Creator                                  |        1633 |
+| Writing           | Executive Story Editor                                   |        1570 |
+| Writing           | Story Artist                                             |        1549 |
+| Writing           | Musical                                                  |        1406 |
+| Writing           | Story Consultant                                         |        1305 |
+| Writing           | Writers' Production                                      |         818 |
+| Writing           | Story Developer                                          |         815 |
+| Writing           | Other                                                    |         544 |
+| Writing           | Head of Story                                            |         463 |
+| Writing           | Opera                                                    |         434 |
+| Writing           | Graphic Novel                                            |         393 |
+| Writing           | Story Supervisor                                         |         357 |
+| Writing           | Story Coordinator                                        |         130 |
+| Writing           | Story Manager                                            |          49 |
+| Writing           | Junior Story Editor                                      |          22 |
+| Writing           | Senior Story Editor                                      |          21 |
++-------------------+----------------------------------------------------------+-------------+
