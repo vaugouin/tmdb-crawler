@@ -325,11 +325,14 @@ SET autocommit = 1; """
                 and each id costs a full "everything" chain of doomed API calls
                 (TMDB-CRAWLER-027). NOT EXISTS on the (ENTITY_TYPE, ID_ENTITY) unique
                 key keeps the lookup an index probe. TIM_RETRY_AFTER lets an id whose
-                window has expired come back for another try.
+                window has expired come back for another try. TIM_RETRY_AFTER is
+                written in naive Paris time, so it is compared with the Paris time of
+                the crawler, not with the server clock NOW() (TMDB-CRAWLER-034).
                 """
+                strretrynow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
                 return (" AND NOT EXISTS (SELECT 1 FROM T_WC_TMDB_ID_NOT_FOUND NF "
                         f"WHERE NF.ENTITY_TYPE = '{strentitytype}' AND NF.ID_ENTITY = {stridcolumn} "
-                        "AND NF.TIM_RETRY_AFTER > NOW()) ")
+                        f"AND NF.TIM_RETRY_AFTER > '{strretrynow}') ")
 
             def f_wikidataidfixsql(strentitytype, strwikidatatable, strtmdbtable, stridcolumn, strimdbprefix):
                 """
@@ -1267,8 +1270,11 @@ WHERE c.DELETED = 0
 
                         strsqlinsert = f"""INSERT INTO {image_table}
                             ({id_field}, IMAGE_PATH, TYPE_IMAGE, DELETED, DISPLAY_ORDER, DAT_CREAT, TIM_UPDATED, LANG)
-                            VALUES (%s, %s, %s, 0, %s, NOW(), NOW(), %s)"""
-                        cursor.execute(strsqlinsert, (lngid, image_path, image_type, lngbackfillorder, row_lang))
+                            VALUES (%s, %s, %s, 0, %s, %s, %s, %s)"""
+                        # Paris time, like every other DAT_CREAT / TIM_UPDATED write (TMDB-CRAWLER-034)
+                        strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+                        strnowdate = datetime.now(cp.paris_tz).strftime("%Y-%m-%d")
+                        cursor.execute(strsqlinsert, (lngid, image_path, image_type, lngbackfillorder, strnowdate, strnow, row_lang))
                         lnginsertcount += 1
                         print(f"Inserted missing {image_type} for {strentitylabel} {lngid}: {image_path} (lang: {row_lang})")
 

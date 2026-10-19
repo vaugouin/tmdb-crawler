@@ -177,10 +177,14 @@ Keep Markdown, prompt files, JSON config, and logs UTF-8. These files contain no
 
 This crawler is built and run as a Docker container via the repo's root `Dockerfile`. The image is based on `python:3.10.5-slim-buster`, installs `requirements.txt`, copies the repo into `/app`, and runs `python ./tmdb-crawler.py` as its `CMD`. Pass database/API credentials at runtime (e.g. `docker run --env-file ...`); do not bake secrets into the image.
 
+## Clock (2026-10-19, DEPLOYMENT-015)
+
+Naive `DATETIME` / `DATE` columns hold naive Europe/Paris time. Compute them in Python with `datetime.now(cp.paris_tz)` (`paris_tz` inside `tmdb_functions.py`; pytz, so the image needs no `tzdata`), never with a bare `datetime.now()` (UTC in the container) nor with the server clock `NOW()` / `CURDATE()`, in a write or in a comparison (TMDB-CRAWLER-034). A human-read date is Europe/Paris with its offset, never a fixed `+02:00`. `tmdb_functions.py` is byte-identical in sparql-crawler and wikidata-crawler: carry any fix to both copies and compare the hashes.
+
 ---
 
-**Last Updated**: 2026-09-14
-**Current Version**: 1.0.1 
+**Last Updated**: 2026-10-19
+**Current Version**: 1.0.2 
 
 ## Backlog (Nestor second-brain)
 

@@ -27,6 +27,8 @@ Database connection settings are read from the same environment variables as
 the crawler (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME).
 """
 
+from datetime import datetime
+
 import pymysql
 
 import citizenphil as cp
@@ -164,12 +166,14 @@ JOIN (
     GROUP BY {id_field}
 ) g ON g.gid = i.{id_field}
 SET i.DISPLAY_ORDER = g.maxord + i.ID_ROW,
-    i.TIM_UPDATED = NOW()
+    i.TIM_UPDATED = %s
 WHERE i.DISPLAY_ORDER = 0
   AND ({has_main})
   AND NOT (i.TYPE_IMAGE = '{main_type}' AND ({path_match}))
 """
-    cursor.execute(strsql)
+    # Paris time, not the server clock NOW() (TMDB-CRAWLER-034)
+    strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute(strsql, (strnow,))
     return cursor.rowcount
 
 
@@ -196,13 +200,15 @@ UPDATE {image_table} i
 JOIN {src} s ON s.{id_field} = i.{id_field}
 SET i.DISPLAY_ORDER = {order_expr},
     i.DELETED = 0,
-    i.TIM_UPDATED = NOW()
+    i.TIM_UPDATED = %s
 WHERE s.{main_field} IS NOT NULL
   AND s.{main_field} <> ''
   AND i.TYPE_IMAGE = '{main_type}'
   AND i.IMAGE_PATH = s.{main_field}
 """
-        cursor.execute(strsql)
+        # Paris time, not the server clock NOW() (TMDB-CRAWLER-034)
+        strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute(strsql, (strnow,))
         total += cursor.rowcount
     return total
 
@@ -229,7 +235,7 @@ def f_insert_missing_main_images(cursor, config):
         strsql = f"""
 INSERT INTO {image_table}
     ({id_field}{strextracols}, IMAGE_PATH, TYPE_IMAGE, DISPLAY_ORDER, DELETED, DAT_CREAT, TIM_UPDATED, LANG)
-SELECT s.{id_field}{strextraselect}, s.{main_field}, '{main_type}', {lngorder}, 0, CURDATE(), NOW(), {lang_sql}
+SELECT s.{id_field}{strextraselect}, s.{main_field}, '{main_type}', {lngorder}, 0, %s, %s, {lang_sql}
 FROM {src} s
 LEFT JOIN {image_table} i
   ON i.{id_field} = s.{id_field}
@@ -239,7 +245,10 @@ WHERE s.{main_field} IS NOT NULL
   AND s.{main_field} <> ''
   AND i.ID_ROW IS NULL
 """
-        cursor.execute(strsql)
+        # Paris date and time, not the server clock CURDATE() / NOW() (TMDB-CRAWLER-034)
+        strnow = datetime.now(cp.paris_tz).strftime("%Y-%m-%d %H:%M:%S")
+        strnowdate = datetime.now(cp.paris_tz).strftime("%Y-%m-%d")
+        cursor.execute(strsql, (strnowdate, strnow))
         total += cursor.rowcount
     return total
 
