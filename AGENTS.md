@@ -184,7 +184,7 @@ Naive `DATETIME` / `DATE` columns hold naive Europe/Paris time. Compute them in 
 ---
 
 **Last Updated**: 2026-10-20
-**Current Version**: 1.0.3 
+**Current Version**: 1.0.4 
 
 ## Backlog (Nestor second-brain)
 
