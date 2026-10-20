@@ -4,7 +4,7 @@ T_WC_TMDB_EPISODE reloaded from the dump of 2026-10-16 07:17, then completed
 from T_WC_T2S_EPISODE up to the T2S run of 2026-10-19 04:26).
 
 Re-fetches from TMDb every season whose episodes neither source could restore,
-sized by doc/sql/check-episode-gap-20261020.sql:
+sized by doc/sql/archive/check-episode-gap-20261020.sql:
   A. seasons refreshed since the dump whose series is not in T2S;
   B. seasons refreshed since the last T2S run.
 One call per season: f_tmdbseasontosql() rewrites the episode rows (basic data,
@@ -14,7 +14,7 @@ to the regular crawler.
 Idempotent and resumable: a season is skipped once its TIM_UPDATED is later
 than the start of the first run (server variable strtmdbrefetchseasons20261020start).
 
-    ./refetch-seasons-20261020.sh
+    ./refetch-seasons-20261020.sh  (archived once run: to replay, move both files back to the root)
 """
 
 from datetime import datetime
