@@ -1,181 +1,62 @@
 # AGENTS.md - Agent Guide for TMDb Crawler
 
-This file gives you the agentic context you need to work on this codebase safely. For project overview, features, install / deploy steps and human-facing security / performance / troubleshooting material, read @README.md — that file is canonical and not duplicated here.
-
-This is the single canonical guide for autonomous coding agents in this repository. Assistant-specific files such as @CLAUDE.md, and any future tool-specific guide such as `GEMINI.md`, should only point here and should not duplicate repository instructions.
-
-Deeper specs live in their own files:
-- @doc/sql/*.sql — reference DDL for the database schema; treat these files as read-only unless the user explicitly asks you to edit schema documentation
-
-- For any project update, keep documentation aligned:
-  - Update `README.md` for user-facing behavior, configuration, setup, deployment, troubleshooting, or verification changes.
-  - Update this file only when agent workflow or safety context changes.
-
----
+Rules an agent needs to work on this codebase safely. Overview, setup, process catalogue, deployment and monitoring live in @README.md, which is canonical: update it for any user-facing change (behaviour, configuration, deployment, verification), and update this file only when agent workflow or safety context changes. `CLAUDE.md` and any other tool-specific file only point here.
 
 ## Related repositories (project ecosystem)
 
-`tmdb-crawler` is one stage of **Agent BBB**, a multi-repository movie/TV database system owned by GitHub user `vaugouin`. All sibling repos live under `%USERPROFILE%/Code/<repo>` and at `github.com/vaugouin/<repo>`; they are interdependent stages of one pipeline that converges on a shared MySQL/MariaDB database (`T_WC_*` tables) and a ChromaDB vector store. The canonical roster of sibling repositories is kept in `%USERPROFILE%/Nestor/projets/t2s-backlog/topics/related-repositories.txt` (documentation repo `Nestor`, outside `Code/`).
+`tmdb-crawler` is the acquisition stage and primary data source of **Agent BBB** (sibling repos under `%USERPROFILE%/Code/<repo>` and `github.com/vaugouin/<repo>`, converging on a shared MariaDB with `T_WC_*` tables). Canonical roster of siblings: `%USERPROFILE%/Nestor/projets/t2s-backlog/topics/related-repositories.txt`.
 
-Pipeline stages:
-- **Infrastructure** — `chromadb` (vector service), `reverseproxy` (NGINX TLS ingress), `chromadb-security-test` (firewall validation), `tools` (host-side operational scripts for the shared MariaDB: backups per perimeter, one-off `.sql` runs; **private repo**, it documents where the database lives and how it is restored).
-- **Acquisition** — `tmdb-crawler`, `imdb-crawler`, `sparql-crawler`, `sparql-movies-persons`, `wikidata-crawler`, `wikipedia-crawler`, `selenium-tmdb`, `download-images`, `sqlite-plex-to-tmdb`, `movieparadise`, `open-credits` (crowdsourced OCR of on-screen credits into `T_WC_OC_*`).
-- **Preprocessing → `T_WC_T2S_*`** — `tmdb-movie-preprocess`, `tmdb-person-preprocess`, `keywords-processing`.
-- **Semantic index & name resolution** — `embedding-update`, `embedding-query`, `rapidfuzz_query`.
-- **Serving** — `fastapi-text2sql` (NL→SQL API + MCP server), `voice-agent`, `tmdb-front` (PHP web front-end).
-- **Evaluation** — `text2sql-eval`, `extract-movie-questions`.
-- **Maintenance & tooling** — `plex-duplicates`, `subtitle-translate`, `powershell`, `playwright-test`, `manual-refresh` (one-entity TMDb + Wikipedia refresh console, formerly `python`).
-- **Monitoring & observability** — `data-monitoring`, `pipeline-3d` (three.js replay of one question's execution trace through `voice-agent` and `fastapi-text2sql`).
-
-**This repository's role:** Acquisition stage and the primary data source. Synchronises movies, TV series, persons, collections, keywords, networks, and production companies from the TMDb API into the `T_WC_TMDB_*` tables that the rest of the pipeline builds on. Its keyword output feeds `keywords-processing`; its entity tables feed `tmdb-movie-preprocess` and `tmdb-person-preprocess`.
-
----
-
-## Where things live (file → role)
-
-Edit at the right layer; the architecture is intentionally split.
+It fills the `T_WC_TMDB_*` tables (movies, series, persons, collections, keywords, networks, companies) from the TMDb API. Downstream: `keywords-processing` (keywords), `tmdb-movie-preprocess` and `tmdb-person-preprocess` (entity tables), `selenium-tmdb` (writes Wikidata QIDs onto TMDb that processes 23/29/30 pick up).
 
 ## Code conventions
 
-- **Hungarian notation** for variables (legacy style):
-  - `str` — strings (`strtablename`, `strapiversion`)
-  - `lng` — integers (`lngpage`, `lngrowsperpage`)
-  - `dbl` — floats (`dblavailableram`)
-  - `arr` — lists / arrays
-  - `int` — boolean-like flags (`intcleanupenabled`, `intentity`)
-- **Function naming**: public pipeline entry points use `f_` (`f_text2sql`, `f_entity_extraction`, `f_resolve_complex_question`, `f_answer_single_value`, `f_hello_world`); private helpers use `_` (`_call_chat_llm`, `_normalize_llm_model`).
-- **Docstrings**: Google-style on public functions.
-- **Error handling**: broad try/except with console logging; surface failures via the `error` response field and the `messages` trace. Database execution errors are not returned directly to clients — they go through the complex-question retry path when enabled.
-- **JSON serialization**: use `logs.decimal_serializer()` for `Decimal` and `datetime`.
+- **Hungarian notation** for variables (legacy): `str`, `lng` (integers), `dbl` (floats), `arr` (lists), `int` (boolean-like flags).
+- Function names: `f_` prefix (`f_tmdbmovietosql`, `f_notfoundfilter`); private helpers `_`.
+- Keep Markdown, JSON and logs UTF-8: they carry non-ASCII names; avoid operations that rewrite them with mojibake.
 
----
+## SQL files live in `doc/sql/`
 
-## Database Schema Sources
+Stack-wide convention (2026-08-20). Every **read-only** `.sql` (audit, monitoring, exports, reference DDL) lives in `doc/sql/`, never at the root nor in a `doc/queries/`. Exceptions: a `.sql` **executed by code** stays where the code expects it (moving it breaks a run silently), and a `.sql` that **writes** (migration, seed, cleanup) stays with its procedure. Test: if running it twice by accident would change the database, it is not a `doc/sql/` file.
 
-Full DDL lives under [doc/sql/](doc/sql/); do not duplicate table definitions here. Treat these files as reference-only unless the user explicitly asks for schema-doc edits.
-
-- [doc/sql/IMDb-tables.sql](doc/sql/T2S-tables.sql) — source IMDb tables.
-- [doc/sql/T2S-tables.sql](doc/sql/T2S-tables.sql) — canonical Text2SQL read-model tables used by prompts, API detail endpoints, cache, and evaluation tables.
-- [doc/sql/TMDb-tables.sql](doc/sql/TMDb-tables.sql) — upstream/source TMDb tables and reference tables.
-- [doc/sql/Wikidata-tables.sql](doc/sql/Wikidata-tables.sql) — Wikidata staging and canonical tables.
-- [doc/sql/Wikipedia-tables.sql](doc/sql/Wikipedia-tables.sql) — Wikipedia tables.
-
----
+The DDL files in `doc/sql/` (`IMDb-`, `T2S-`, `TMDb-`, `Wikidata-`, `Wikipedia-tables.sql`) are the schema reference: do not duplicate table definitions elsewhere, and edit them only when asked.
 
 ## Tracking / monitoring queries
 
-Curated, hand-written operational queries live in [doc/sql/](doc/sql/) (for example,
-`doc/sql/monitoring.sql`), alongside the auto-generated DDL dumps in that folder.
-
-**Regular task — ship a tracking query with every new feature.** Whenever a change
-adds or starts populating a column, table, or pipeline output (a new external id, a
-new entity, a new completion flag, …), add a matching tracking query to
-`doc/sql/monitoring.sql` in the same change. The query should let an operator
-**verify the feature is working and measure coverage/progress** — typically a
-`COUNT(col)` fill rate vs `COUNT(*)`, or a per-`DAT_CREAT` collection-rate view.
-Prefer indexed columns so the query stays cheap, and add a one-line comment stating
-what it tracks, the backlog ref, and how to read a NULL/zero (often "upstream has no
-value", not a crawler miss). This is not optional polish — it is part of "done".
-
-Backlog refs: TMDB-CRAWLER-004 (origin of the monitoring file), TMDB-CRAWLER-005
-(`ID_TVDB` coverage across series/seasons/episodes).
-
----
+**Ship a tracking query with every feature** that adds or starts populating a column, table or pipeline output: add it to [doc/sql/monitoring.sql](doc/sql/monitoring.sql) in the same change. It must let an operator verify the feature works and measure coverage (typically `COUNT(col)` vs `COUNT(*)`, or a per-`DAT_CREAT` rate), stay cheap (indexed columns), and carry a one-line comment: what it tracks, the backlog ref, how to read a NULL/zero (often "upstream has no value", not a crawler miss). This is part of "done" (TMDB-CRAWLER-004).
 
 ## Entity fetch outcomes (TMDB-CRAWLER-027)
 
-Every `f_tmdb<entity>tosql()` and `f_tmdb<entity>tosqleverything()` returns one of
-`INT_TMDB_FETCH_OK` / `INT_TMDB_FETCH_GONE` / `INT_TMDB_FETCH_ERROR`, never `None`.
-**Check the return value at any new call site**: a `GONE` (TMDb `status_code 34`)
-must stop the chain, not just the current call — that is what keeps a deleted id
-from costing ten doomed API calls per run.
+Every `f_tmdb<entity>tosql()` / `f_tmdb<entity>tosqleverything()` returns `INT_TMDB_FETCH_OK` / `_GONE` / `_ERROR`, never `None`. **Check it at every new call site**: a `GONE` (TMDb `status_code 34`) must stop the whole chain, not just the current call.
 
-Dead ids are recorded in `T_WC_TMDB_ID_NOT_FOUND`, which the crawler **creates on
-startup** (`f_tmdbidnotfoundensuretable()`), so no manual migration is needed on the
-VPS; the canonical DDL is mirrored in `doc/sql/TMDb-tables.sql`. Any new process
-query that feeds the API from a DB list must append `f_notfoundfilter(<entity type>,
-<id column>)` before its `ORDER BY`, otherwise dead ids come back on every run. Entity
-type strings are `movie`, `person`, `serie`, `collection`, `company`, `network`,
-`list`.
-
----
+Dead ids go to `T_WC_TMDB_ID_NOT_FOUND`, created by the crawler on startup (no VPS migration; DDL mirrored in `doc/sql/TMDb-tables.sql`). Any new process query feeding the API from a DB list must append `f_notfoundfilter(<entity type>, <id column>)` before its `ORDER BY`, or dead ids come back every run. Entity types: `movie`, `person`, `serie`, `collection`, `company`, `network`, `list`. Ledger behaviour: README § Deleted TMDb ids.
 
 ## Resume after an interruption
 
-A run stopped by `docker stop`, a crash or a MySQL error resumes at the interrupted
-process on the next start (README, "Resume after an interruption"). The run order is
-built from the four scope dicts declared together before `f_runprocessscope`
-(`arrprocessscopenew`, `arrtmdbchanges`, `arrmissingimages`, `arrprocessscoperefresh`).
-When adding a process:
+Mechanism: README § Resume after an interruption. The run order is built from the four scope dicts declared before `f_runprocessscope` (`arrprocessscopenew`, `arrtmdbchanges`, `arrmissingimages`, `arrprocessscoperefresh`). When adding a process:
 
-- Put it in one of those dicts. A loop of its own must call `f_resumeskip(intindex)`
-  then `f_resumemark(intindex)` at the top of each iteration, like the changes and
-  image loops, otherwise an interruption inside it resumes at the wrong place.
-- If its query is ordered by id ascending, add it to `arrprocessorderedbyid`, so a
-  resume skips the ids already done (harmless when the query also excludes them).
-  A process ordered by popularity or `TIM_UPDATED` must not be added: skipping "ids
-  up to the last one" would then drop unprocessed rows.
-- Every row must stay safe to process twice: the row running when the container was
-  stopped is replayed.
+- Put it in one of those dicts. A loop of its own must call `f_resumeskip(intindex)` then `f_resumemark(intindex)` at the top of each iteration, or a resume lands in the wrong place.
+- Add it to `arrprocessorderedbyid` only if its query is ordered by id ascending. Never for a query ordered by popularity or `TIM_UPDATED`: skipping "ids up to the last one" would drop unprocessed rows.
+- Every row must be safe to process twice: the row running at the stop is replayed.
 
 ## Additive release/watch snapshots (TMDB-CRAWLER-020 / -030)
 
-`T_WC_TMDB_MOVIE.DAT_RELEASE` remains owned by the established Movie Details path
-in `f_tmdbmovietosql()`. Never derive or overwrite it from `/release_dates`.
-Country-specific release events and movie/series watch providers are independent,
-authoritative snapshots. Build and validate every row in memory first, then replace
-one title's rows and completion marker in a single transaction. A complete empty
-`results` collection clears the old snapshot; a network/API error, rate limit,
-malformed payload, incomplete country/provider entry, or database exception must
-leave the old snapshot intact. Watch-provider consumers must retain the TMDb link,
-show crawl freshness, and attribute JustWatch; these rows are not cinema showtimes.
+Behaviour: README § Release-date, provider-entity and work-provider snapshots. Rules:
 
-The provider catalogue is a separate entity-bearing snapshot. Process 19 fetches
-`/watch/providers/movie` and `/watch/providers/tv`; `T_WC_TMDB_WATCH_PROVIDER`
-owns stable identity (`ID_PROVIDER`, name, logo), while catalogue membership and
-country priority live in `T_WC_TMDB_WATCH_PROVIDER_CATALOG` and
-`T_WC_TMDB_WATCH_PROVIDER_REGION`; `T_WC_TMDB_WATCH_PROVIDER_CATALOG_STATE`
-records the successful snapshot time and expected row counts for each catalogue.
-The per-work movie/series tables remain the qualified associations and own
-country, monetization mode, TMDb link, response order and observation time. Never
-copy a country priority or work availability onto provider identity. Validate a
-whole catalogue before replacing that catalogue's membership/regions; an
-unexpectedly empty global catalogue is an error, unlike a valid empty per-work
-availability snapshot.
-
----
+- `T_WC_TMDB_MOVIE.DAT_RELEASE` belongs to the Movie Details path in `f_tmdbmovietosql()`. Never derive or overwrite it from `/release_dates`.
+- Build and validate every row in memory, then replace one title's rows and its completion marker in a single transaction. A complete empty `results` clears the old snapshot; any network/API error, rate limit, malformed or incomplete payload, or DB exception leaves it intact.
+- Provider catalogue (process 19): validate a whole catalogue before replacing its membership/regions; an empty global catalogue is an error (unlike a valid empty per-work snapshot). Never copy a country priority or work availability onto provider identity (`T_WC_TMDB_WATCH_PROVIDER`).
+- Watch-provider consumers must keep the TMDb link, show crawl freshness and attribute JustWatch; these rows are not cinema showtimes.
 
 ## SQL Object Naming Conventions
 
-- SQL table and column names are uppercase snake case, except legacy imported TMDb genre columns such as `id` and `name`.
-- Persistent tables use `T_WC_*`.
-- Text2SQL read-model tables use `T_WC_T2S_*`.
-- TMDb source/reference tables use `T_WC_TMDB_*`.
-- Wikidata tables use `T_WC_WIKIDATA_*`; staging tables use `STG_T_WC_WIKIDATA_*`.
-- Wikipedia tables use `T_WC_WIKIPEDIA_*`.
-- Join tables usually follow `T_WC_T2S_{PARENT}_{CHILD}`, for example `T_WC_T2S_MOVIE_GENRE`, `T_WC_T2S_PERSON_MOVIE`.
-- Primary keys are usually `ID_{ENTITY}` for entity tables, `ID_ROW` for generic/join rows, or a table-specific surrogate such as `ID_T2S_PERSON_MOVIE`.
-- Foreign keys reuse the referenced primary-key name, for example `ID_MOVIE`, `ID_PERSON`, `ID_GENRE`.
-- Date columns use `DAT_*`; datetime/timestamp columns use `TIM_*`.
-- Boolean-like flags use `IS_*` or legacy integer flags such as `DELETED`.
-- Ordering uses `DISPLAY_ORDER`.
-- Aggregate counters use `*_COUNT`.
-- Media paths use `*_PATH`.
-- Language-specific labels/titles often use suffixes such as `_FR`; generic language rows use `LANG`.
-- RapidFuzz/generated search columns use `*_NORM` and `*_KEY`; popularity tie-breakers commonly use `POPULARITY`.
-- Index names are mixed legacy style. Preserve existing style: simple `KEY COLUMN_NAME`, `IDX_*` for indexes, `UK_*` for unique keys, `FK_*` for foreign keys, and `ft_*` for FULLTEXT indexes.
-
----
-
-## Encoding
-
-Keep Markdown, prompt files, JSON config, and logs UTF-8. These files contain non-ASCII names and multilingual examples. Avoid editor or terminal operations that rewrite them with mojibake.
-
----
+- Tables and columns uppercase snake case (except legacy TMDb genre columns `id`, `name`). Prefixes: `T_WC_*` persistent, `T_WC_T2S_*` Text2SQL read model, `T_WC_TMDB_*`, `T_WC_WIKIDATA_*` (staging `STG_T_WC_WIKIDATA_*`), `T_WC_WIKIPEDIA_*`. Join tables `T_WC_T2S_{PARENT}_{CHILD}`.
+- Keys: `ID_{ENTITY}` for entities, `ID_ROW` for generic/join rows (or a surrogate like `ID_T2S_PERSON_MOVIE`); foreign keys reuse the referenced key name.
+- Columns: `DAT_*` dates, `TIM_*` datetimes, `IS_*` or legacy `DELETED` flags, `DISPLAY_ORDER`, `*_COUNT`, `*_PATH`, `_FR`-style language suffixes (generic rows use `LANG`), `*_NORM` / `*_KEY` for RapidFuzz columns, `POPULARITY` as tie-breaker.
+- Indexes: preserve the mixed legacy style (`KEY COLUMN_NAME`, `IDX_*`, `UK_*`, `FK_*`, `ft_*` for FULLTEXT).
 
 ## Build & deployment (Docker)
 
-This crawler is built and run as a Docker container via the repo's root `Dockerfile`. The image is based on `python:3.10.5-slim-buster`, installs `requirements.txt`, copies the repo into `/app`, and runs `python ./tmdb-crawler.py` as its `CMD`. Pass database/API credentials at runtime (e.g. `docker run --env-file ...`); do not bake secrets into the image.
+See README § Usage and the `Dockerfile`. Pass credentials at runtime (`--env-file`), never bake secrets into the image.
 
 ## Clock (2026-10-19, DEPLOYMENT-015)
 
@@ -183,69 +64,20 @@ Naive `DATETIME` / `DATE` columns hold naive Europe/Paris time. Compute them in 
 
 ---
 
-**Last Updated**: 2026-10-25
-**Current Version**: 1.0.8 
+**Last Updated**: 2026-10-31
+**Current Version**: 1.0.9 
 
 ## Backlog (Nestor second-brain)
 
-The prioritized, agent-ready implementation backlog for this repo lives in the **Nestor**
-knowledge repo (a separate repo, not cloned alongside this one):
-
-- This repo: `C:\Users\vaugo\Nestor\projets\t2s-backlog\repos\tmdb-crawler.md`
-- Cross-repo dashboard: `C:\Users\vaugo\Nestor\projets\t2s-backlog\index.md`
-
-Consult it before implementing: tasks are `TMDB-CRAWLER-NNN` with status (done / in-progress /
-todo), priority, and quick-wins. NOTE: these are local paths on Philippe's PC and do not
-resolve on the VPS or on cloud agents (claude.ai/code).
-
-## SQL files live in `doc/sql/`
-
-Stack-wide convention, set 2026-08-20. Every **read-only** `.sql` of this repo, audit
-queries, monitoring queries, exports, reference DDL dumps, lives in `doc/sql/`, never
-at the root and never in a `doc/queries/` of its own.
-
-Two deliberate exceptions, and they are the reason the rule is worded around reading
-rather than around file type. A `.sql` **executed by code** stays where the code expects
-it, because moving it breaks a run silently. And a `.sql` that **writes** (migration,
-seed, `DELETE` cleanup) stays put too: it belongs to a procedure, not to documentation.
-When in doubt, ask whether running the file twice by accident would change the database.
-If yes, it is not a `doc/sql/` file.
+Tasks `TMDB-CRAWLER-NNN` (status, priority, quick wins) live in the Nestor repo; consult before implementing: `C:\Users\vaugo\Nestor\projets\t2s-backlog\repos\tmdb-crawler.md` (dashboard: `...\t2s-backlog\index.md`). These paths exist only on Philippe's PC, not on the VPS or cloud agents.
 
 ## The `*_V1` Wikidata tables are frozen: never read a fact from them
 
-**Added 2026-09-14, after process 23 had been blind for an unknown length of time.**
-The SPARQL crawlers that filled `T_WC_WIKIDATA_MOVIE_V1`, `_SERIE_V1`, `_PERSON_V1` and
-their siblings are **stopped** (`WIKIDATA-CRAWLER-015`). Only `wikipedia-crawler` still
-writes those tables, and only the image columns (`WIKIPEDIA_POSTER_PATH`,
-`WIKIPEDIA_PROFILE_PATH`, `WIKIPEDIA_IMAGE_PATH`), so **a recent `TIM_UPDATED` on a V1
-table is not evidence that its facts are current.** `ID_WIKIDATA`, `ID_IMDB` and the
-TMDb id columns stopped moving when the crawlers did.
+The SPARQL crawlers that filled `T_WC_WIKIDATA_MOVIE_V1`, `_SERIE_V1`, `_PERSON_V1` and siblings are **stopped** (`WIKIDATA-CRAWLER-015`). Only `wikipedia-crawler` still writes them, and only the image columns, so **a recent `TIM_UPDATED` on a V1 table is not evidence that its facts are current**.
 
-Read Wikidata facts from V2 instead: the entity lives in `T_WC_WIKIDATA_<TYPE>` and the
-external ids are **statements**, `P345` for IMDb, `P4947` / `P4983` / `P4985` for the
-TMDb movie / series / person id, joined through `T_WC_WIKIDATA_STATEMENT` and
-`T_WC_WIKIDATA_EXTERNAL_ID_VALUE`. `f_wikidataidfixsql` in `tmdb-crawler.py` is the
-worked example, and the `preprocess/wikidata-id-*.sql` files of `selenium-tmdb` are the
-same shape.
+Read Wikidata facts from V2: the entity in `T_WC_WIKIDATA_<TYPE>`, external ids as **statements** (`P345` IMDb, `P4947` / `P4983` / `P4985` TMDb movie / series / person) through `T_WC_WIKIDATA_STATEMENT` and `T_WC_WIKIDATA_EXTERNAL_ID_VALUE`. Worked examples: `f_wikidataidfixsql` in `tmdb-crawler.py`, `selenium-tmdb/preprocess/wikidata-id-*.sql`.
 
-**Why this failure is quiet, and therefore worth a section.** A V1 read does not error
-and does not return nothing: it returns the subset V1 happened to know, which still
-looks like a plausible result set. Process 23 kept running daily, kept printing a row
-count, and kept repairing a handful of movies, while the population it exists to repair
-had grown by two orders of magnitude and was invisible to it. Measured 2026-09-14:
-`selenium-tmdb`'s equivalent export went from about 106 rows to 20 201 the day it moved
-to V2, and 235 movies its robot visited that morning already carried on TMDb the exact
-QID it wrote, because our copy of `ID_WIKIDATA` had been stale for 13 days.
+The failure is quiet: a V1 read returns the plausible-looking subset V1 happened to know. Process 23 ran daily on V1 while its target population grew a hundredfold unseen (fixed 2026-09-14). Two traps when porting:
 
-Two traps came with that code and are worth recognising elsewhere:
-
-- **`<>` against a nullable column swallows the `IS NULL` case.** The old clause ANDed
-  `V1.ID_WIKIDATA <> TMDB.ID_WIKIDATA` with `(TMDB.ID_WIKIDATA IS NULL OR = '')`. On a
-  NULL the `<>` yields NULL, so only the empty string ever matched and one branch of an
-  explicit `OR` was dead. Prefer testing what you mean ("our copy is unusable") over
-  comparing to a value that may be absent.
-- **V2 joins multiply rows.** One entity can carry several `P345` statements and several
-  entities can share an IMDb id, so a V1 query ported column-for-column returns the same
-  id many times. `SELECT DISTINCT` on the id alone is the fix when only the id is wanted;
-  when other columns are selected, `DISTINCT` does not help and a scalar subquery is
-  needed (see `selenium-tmdb/preprocess/wikidata-id-movie-fix.sql`).
+- `<>` against a nullable column swallows the `IS NULL` case; test what you mean ("our copy is unusable") instead.
+- V2 joins multiply rows (several `P345` per entity, shared IMDb ids). `SELECT DISTINCT` on the id alone when only the id is wanted; otherwise a scalar subquery (see `selenium-tmdb/preprocess/wikidata-id-movie-fix.sql`).

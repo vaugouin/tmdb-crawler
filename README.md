@@ -27,39 +27,40 @@ FLUSH PRIVILEGES;
 > enabled on the **server** (`SET GLOBAL local_infile=1`, or `local_infile=ON` in
 > the MariaDB config); the client side is already enabled in the connection.
 
-1. **Create TMDb Tables**: Execute the `TMDb-tables.sql` script in your MariaDB/MySQL database to create all necessary tables and indexes.
+1. **Create TMDb Tables**: Execute the `doc/sql/TMDb-tables.sql` script in your MariaDB/MySQL database to create all necessary tables and indexes.
    ```sql
-   mysql -u your_username -p your_database < TMDb-tables.sql
+   mysql -u your_username -p your_database < doc/sql/TMDb-tables.sql
    ```
 
-2. **Create Server Variables Table**: Execute the `T_WC_SERVER_VARIABLE.sql` script to set up the server variables table for tracking processing state.
+2. **Create Server Variables Table**: Execute the `doc/sql/T_WC_SERVER_VARIABLE.sql` script to set up the server variables table for tracking processing state.
    ```sql
-   mysql -u your_username -p your_database < T_WC_SERVER_VARIABLE.sql
+   mysql -u your_username -p your_database < doc/sql/T_WC_SERVER_VARIABLE.sql
    ```
 
-3. **Create Wikidata Tables**: Execute the `Wikidata-tables.sql` script to create tables for Wikidata integration.
+3. **Create Wikidata Tables**: Execute the `doc/sql/Wikidata-tables.sql` script to create tables for Wikidata integration.
    ```sql
-   mysql -u your_username -p your_database < Wikidata-tables.sql
+   mysql -u your_username -p your_database < doc/sql/Wikidata-tables.sql
    ```
 
-4. **Create Wikipedia Tables**: Execute the `Wikipedia-tables.sql` script to create tables for Wikipedia data integration.
+4. **Create Wikipedia Tables**: Execute the `doc/sql/Wikipedia-tables.sql` script to create tables for Wikipedia data integration.
    ```sql
-   mysql -u your_username -p your_database < Wikipedia-tables.sql
+   mysql -u your_username -p your_database < doc/sql/Wikipedia-tables.sql
    ```
 
 ### Configuration
 The application requires database and API credentials to function:
 
-1. **Copy Configuration Template**: Copy `citizenphilsecrets.example.py` to `citizenphilsecrets.py`
+1. **Copy Configuration Template**: Copy `.env.example` to `.env`
    ```bash
-   cp citizenphilsecrets.example.py citizenphilsecrets.py
+   cp .env.example .env
    ```
 
-2. **Update Configuration**: Edit `citizenphilsecrets.py` with your actual values:
-   - **MariaDB/MySQL Connection**: Update database host, username, password, and database name
-   - **TMDb API Key**: Add your TMDb API key (obtain from https://www.themoviedb.org/settings/api)
+2. **Update Configuration**: Edit `.env` with your actual values:
+   - **MariaDB/MySQL Connection**: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_NAMESPACE` (`T_WC_`)
+   - **TMDb API**: `TMDB_API_DOMAIN_URL`, `TMDB_API_KEY` and `TMDB_API_TOKEN` (obtain from https://www.themoviedb.org/settings/api)
+   - **Timezone**: `USER_TIMEZONE` (default `Europe/Paris`)
 
-   **Important**: Never commit `citizenphilsecrets.py` to version control as it contains sensitive credentials.
+   **Important**: Never commit `.env` to version control as it contains sensitive credentials (it is git-ignored).
 
 ## Features
 
@@ -104,6 +105,7 @@ The crawler works with multiple MySQL tables including:
 - `T_WC_TMDB_SERIE` - TV series records  
 - `T_WC_TMDB_PERSON` - People records
 - `T_WC_TMDB_*_ID_IMPORT` - Temporary import tables
+- `T_WC_TMDB_SEASON` / `T_WC_TMDB_EPISODE` and their `_IMAGE`, `_LANG`, `_VIDEO` and `T_WC_TMDB_PERSON_SEASON` / `_EPISODE` companions - TV seasons and episodes, see [doc/tv-seasons-episodes.md](doc/tv-seasons-episodes.md), [SERIE_UPDATE.md](SERIE_UPDATE.md) and [SERIE_INIT.md](SERIE_INIT.md)
 - Various junction tables for relationships (credits, keywords, etc.)
 - `T_WC_TMDB_MOVIE_SIMILAR` / `T_WC_TMDB_MOVIE_RECOMMENDATION` - grounded neighbour lists per movie, from TMDb `/movie/{id}/similar` (content-based) and `/recommendations` (behaviour-based); populated during the full movie crawl, page-1 rank in `DISPLAY_ORDER` (backlog TMDB-CRAWLER-022). **Only page 1 is ever fetched, so `DISPLAY_ORDER` never exceeds 20 and each refresh is authoritative**: since TMDB-CRAWLER-028 the neighbours TMDb no longer returns are deleted for that title (`f_tmdbprunestaleneighbours`), which is the same rule already applied to images. Before that fix these tables held the union of every top-20 ever returned and grew without bound, ~2 M dead rows measured on 2026-07-28; the historical backlog is purged separately (TMDB-CRAWLER-029).
 - `T_WC_TMDB_SERIE_SIMILAR` / `T_WC_TMDB_SERIE_RECOMMENDATION` - same for TV series, from `/tv/{id}/similar` and `/tv/{id}/recommendations`, populated during the full series crawl (backlog TMDB-CRAWLER-023). Same authoritative-refresh rule and same caveats as the movie tables above.
@@ -136,7 +138,7 @@ The crawler runs ~30 numbered processes grouped by purpose:
 - **61-69**: Backfill missing image rows for each entity type (movie, person, serie, collection, company, network) and the per-language variants for movies, series, and collections
 
 ### Environment Variables
-The script relies on the `citizenphil` module for:
+The variables of `.env` (see Configuration above) are loaded with `python-dotenv` by `citizenphil.py` and `tmdb_functions.py`. The script relies on the `citizenphil` module for:
 - Database connection management
 - TMDb API credentials and headers
 - Server variable storage and retrieval
@@ -148,6 +150,7 @@ The script relies on the `citizenphil` module for:
 - **requests**: HTTP API communication
 - **numpy**: Data processing utilities
 - **pytz**: Timezone management
+- **python-dotenv**: Loads the `.env` file
 - **citizenphil**: Custom module for database and API management
 
 ## Usage
@@ -165,7 +168,7 @@ docker run -d --rm --network="host" --name tmdb-crawler \
   -v $HOME/docker/shared_data/tmdb-crawler:/shared tmdb-crawler-python-app
 ```
 
-Keep the runtime `.env` file outside the application source tree and pass it with Docker's `--env-file` option so local secrets are not included in the build context or image layers.
+Pass the runtime `.env` file with Docker's `--env-file` option; `.dockerignore` excludes it from the build context, so local secrets are not included in image layers.
 
 ### Shell Script
 Use the provided `tmdb-crawler.sh` script to manage the Docker container:
@@ -178,6 +181,7 @@ The script will:
 - Check if the container is already running
 - Create necessary directories (`$HOME/docker/shared_data/tmdb-crawler`)
 - Build and start the container with `/home/debian/docker/tmdb-crawler/.env` as the runtime env file if needed
+- Exit at once while a `CRON_OFF` flag file sits next to it: `off.sh` writes that flag to switch the scheduled run off, `on.sh` removes it
 
 ## Data Flow
 
@@ -317,15 +321,26 @@ tmdb-crawler/
 ├── tmdb-crawler.sh                    # Docker management script for container lifecycle
 ├── tmdb_functions.py                  # TMDb API wrapper functions module
 ├── citizenphil.py                     # Core utility module for database and helpers
-├── citizenphilsecrets.py              # Configuration file with credentials (not in git)
-├── citizenphilsecrets.example.py      # Template for configuration file
+├── on.sh / off.sh                     # Switch the scheduled run back on / off (CRON_OFF flag file)
+├── test_tmdb_availability.py          # Unit tests for the release-date and watch-provider snapshots
+├── fix-main-image.sh / fix_main_image_display_order.py   # Run-once migration: main image pinned to DISPLAY_ORDER 0
+├── purge-stale-neighbours.sh / purge_stale_neighbours.py # Run-once purge of stale similar/recommendation rows (dry run by default)
+├── .env                               # Configuration file with credentials (not in git)
+├── .env.example                       # Template for configuration file
 ├── Dockerfile                         # Container configuration for Docker deployment
 ├── requirements.txt                   # Python dependencies specification
-├── TMDb-tables.sql                    # Database schema creation script
-├── T_WC_SERVER_VARIABLE.sql           # Server variables table setup script
-├── Wikidata-tables.sql                # Wikidata integration tables creation script
-├── Wikipedia-tables.sql               # Wikipedia data tables creation script
-├── Text2SQL-tables.sql                # Text-to-SQL data tables creation script
+├── SERIE_INIT.md / SERIE_UPDATE.md    # TV seasons/episodes bootstrap and refresh strategies
+├── doc/
+│   ├── tv-seasons-episodes.md         # TV seasons and episodes loader
+│   └── sql/
+│       ├── TMDb-tables.sql            # Database schema creation script
+│       ├── T_WC_SERVER_VARIABLE.sql   # Server variables table setup script
+│       ├── Wikidata-tables.sql        # Wikidata integration tables creation script
+│       ├── Wikipedia-tables.sql       # Wikipedia data tables creation script
+│       ├── IMDb-tables.sql            # IMDb data tables creation script
+│       ├── T2S-tables.sql             # Text-to-SQL data tables creation script
+│       └── monitoring.sql             # Tracking and health queries
+├── archive/                           # One-off scripts of closed operations
 ├── .gitignore                         # Git ignore rules for sensitive files
 └── README.md                          # This documentation
 ```
@@ -335,12 +350,12 @@ tmdb-crawler/
 - **`tmdb-crawler.py`** - The main application containing all crawler logic and processing loops
 - **`tmdb_functions.py`** - TMDb API wrapper module with all functions for fetching and storing movies, series, persons, collections, companies, networks, keywords, and lists
 - **`citizenphil.py`** - Core utility module providing database connectivity, SQL helpers, server variable management, and common functions
-- **`citizenphilsecrets.py`** - Configuration file containing database credentials and API keys (excluded from version control)
-- **`TMDb-tables.sql`** - SQL script to create all required database tables and indexes for the TMDb data
-- **`T_WC_SERVER_VARIABLE.sql`** - SQL script to set up server variables table for tracking processing state
-- **`Wikidata-tables.sql`** - SQL script to create database tables for Wikidata integration and cross-referencing
-- **`Wikipedia-tables.sql`** - SQL script to create database tables for Wikipedia data integration
-- **`Text2SQL-tables.sql`** - SQL script to create database tables for Text-to-SQL query API
+- **`.env`** - Configuration file containing database credentials and API keys (excluded from version control)
+- **`doc/sql/TMDb-tables.sql`** - SQL script to create all required database tables and indexes for the TMDb data
+- **`doc/sql/T_WC_SERVER_VARIABLE.sql`** - SQL script to set up server variables table for tracking processing state
+- **`doc/sql/Wikidata-tables.sql`** - SQL script to create database tables for Wikidata integration and cross-referencing
+- **`doc/sql/Wikipedia-tables.sql`** - SQL script to create database tables for Wikipedia data integration
+- **`doc/sql/T2S-tables.sql`** - SQL script to create database tables for Text-to-SQL query API
 - **`tmdb-crawler.sh`** - Shell script for easy Docker container management and deployment
 
 ## Notes
