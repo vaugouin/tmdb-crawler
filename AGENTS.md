@@ -1,5 +1,9 @@
 # AGENTS.md - Agent Guide for TMDb Crawler
 
+## Canary
+
+Start every reply with "Philippe,": no exceptions, including short replies and tool summaries.
+
 Rules an agent needs to work on this codebase safely. Overview, setup, process catalogue, deployment and monitoring live in @README.md, which is canonical: update it for any user-facing change (behaviour, configuration, deployment, verification), and update this file only when agent workflow or safety context changes. `CLAUDE.md` and any other tool-specific file only point here.
 
 ## Related repositories (project ecosystem)
@@ -65,7 +69,7 @@ Naive `DATETIME` / `DATE` columns hold naive Europe/Paris time. Compute them in 
 ---
 
 **Last Updated**: 2026-10-31
-**Current Version**: 1.0.10 
+**Current Version**: 1.0.11 
 
 ## Backlog (Nestor second-brain)
 
