@@ -95,6 +95,9 @@ try:
             # follow the same deployment model. When bootstrap fails, the crawler
             # keeps serving established processes and skips only these additions.
             intavailabilitytablesready = tf.f_tmdbavailabilityensuretables()
+            # Social-network ids of external_ids (selenium-tmdb), same model: when the
+            # columns cannot be added, the crawler carries on without them.
+            tf.f_tmdbsocialensurecolumns()
             # Which id files should we process from the TMDb HTTP server? 
             arrtmdbidfilename = {41: 'movie', 42:'person', 43:'collection', 44:'tv_series', 45: 'keyword', 46: 'tv_network', 47: 'production_company'}
             #arrtmdbidfilename = {45: 'keyword'}

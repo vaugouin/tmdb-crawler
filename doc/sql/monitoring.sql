@@ -331,3 +331,22 @@ WHERE DELETED = 0
        OR VAR_NAME IN ('strtmdbcrawlercurrentprocess', 'strtmdbcrawlerprocessesexecuted',
                        'strtmdbcrawlerstartdatetime', 'strtmdbcrawlerenddatetime'))
 ORDER BY VAR_NAME;
+
+-- -----------------------------------------------------------------------------
+-- Social-network ids of external_ids (1.0.12, for selenium-tmdb)
+-- Rows read since the columns exist (TIM_EXTERNAL_IDS) and how many carry each id.
+-- TIM_EXTERNAL_IDS NULL = not refreshed since 1.0.12 (coverage grows with the
+-- 30-day refresh); an empty string = read, TMDb has no such id (not a crawler miss).
+-- -----------------------------------------------------------------------------
+SELECT 'person' AS ENTITY, COUNT(*) AS TOTAL, COUNT(TIM_EXTERNAL_IDS) AS READ_COUNT,
+       SUM(FACEBOOK_ID <> '') AS FACEBOOK, SUM(INSTAGRAM_ID <> '') AS INSTAGRAM, SUM(TWITTER_ID <> '') AS TWITTER,
+       SUM(TIKTOK_ID <> '') AS TIKTOK, SUM(YOUTUBE_ID <> '') AS YOUTUBE, MAX(TIM_EXTERNAL_IDS) AS LAST_READ
+FROM T_WC_TMDB_PERSON
+UNION ALL
+SELECT 'movie', COUNT(*), COUNT(TIM_EXTERNAL_IDS), SUM(FACEBOOK_ID <> ''), SUM(INSTAGRAM_ID <> ''), SUM(TWITTER_ID <> ''),
+       NULL, NULL, MAX(TIM_EXTERNAL_IDS)
+FROM T_WC_TMDB_MOVIE
+UNION ALL
+SELECT 'serie', COUNT(*), COUNT(TIM_EXTERNAL_IDS), SUM(FACEBOOK_ID <> ''), SUM(INSTAGRAM_ID <> ''), SUM(TWITTER_ID <> ''),
+       NULL, NULL, MAX(TIM_EXTERNAL_IDS)
+FROM T_WC_TMDB_SERIE;

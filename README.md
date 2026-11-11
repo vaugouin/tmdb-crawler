@@ -122,6 +122,23 @@ Processes 34-36 keep a different replacement unit: one work. A structurally comp
 
 Watch-provider data comes from TMDb's JustWatch partnership. Any downstream display must attribute JustWatch and use the stored TMDb link. These rows describe the latest crawled streaming, rental, purchase, free, or ad-supported availability. They are not cinema venues, theatrical showtimes, or a guarantee of same-day availability. The normal title refresh is approximately every 30 days.
 
+## Social-network ids (for selenium-tmdb)
+
+Since 1.0.12 the person, movie and series rows also keep the social-network ids
+of TMDb's `external_ids`, which every details call already fetched:
+`FACEBOOK_ID`, `INSTAGRAM_ID`, `TWITTER_ID` on the three tables, plus
+`TIKTOK_ID` and `YOUTUBE_ID` on persons, and `TIM_EXTERNAL_IDS`, the time they
+were read. `TIM_EXTERNAL_IDS` NULL means the row has not been refreshed since
+1.0.12; an empty string means TMDb has no such id. Coverage therefore grows with
+the 30-day refresh. `selenium-tmdb` exports only the rows already read, to fill
+their empty ids from Wikidata.
+
+The columns are added by the crawler at startup (`f_tmdbsocialensurecolumns`,
+`ADD COLUMN IF NOT EXISTS ... ALGORITHM=INSTANT`, no manual migration; they were
+first added by hand on 2026-11-11). If MariaDB cannot add them instantly the
+crawler carries on without them. Tracking query: `doc/sql/monitoring.sql`,
+"Social-network ids of external_ids".
+
 ## Configuration
 
 ### Process Types
