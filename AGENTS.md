@@ -8,7 +8,7 @@ Rules an agent needs to work on this codebase safely. Overview, setup, process c
 
 ## Related repositories (project ecosystem)
 
-`tmdb-crawler` is the acquisition stage and primary data source of **Agent BBB** (sibling repos under `%USERPROFILE%/Code/<repo>` and `github.com/vaugouin/<repo>`, converging on a shared MariaDB with `T_WC_*` tables). Canonical roster of siblings: `%USERPROFILE%/Nestor/projets/t2s-backlog/topics/related-repositories.txt`.
+`tmdb-crawler` is the acquisition stage and primary data source of **Cinephile App** (sibling repos under `%USERPROFILE%/Code/<repo>` and `github.com/vaugouin/<repo>`, converging on a shared MariaDB with `T_WC_*` tables). Canonical roster of siblings: `%USERPROFILE%/Nestor/projets/t2s-backlog/topics/related-repositories.txt`.
 
 It fills the `T_WC_TMDB_*` tables (movies, series, persons, collections, keywords, networks, companies) from the TMDb API. Downstream: `keywords-processing` (keywords), `tmdb-movie-preprocess` and `tmdb-person-preprocess` (entity tables), `selenium-tmdb` (writes Wikidata QIDs onto TMDb that processes 23/29/30 pick up).
 
